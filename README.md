@@ -30,9 +30,11 @@ summercamp/
 │   ├── index.html            # Dashboard
 │   ├── login.html            # Login page
 │   └── unauthorized.html     # Access denied page
-├── app.yaml                   # App Engine configuration
+├── app.yaml.example           # App Engine config template (copy to app.yaml)
 ├── requirements.txt           # Python dependencies
 └── CLAUDE.md                 # AI assistant guidance
+
+**Note**: `app.yaml` is not tracked in git (contains secrets). Use `app.yaml.example` as a template.
 ```
 
 ## Setup and Deployment
@@ -51,21 +53,35 @@ summercamp/
    cd summercamp
    ```
 
-2. **Configure GCP project**
+2. **Create app.yaml from template**
    ```bash
-   gcloud config set project summercamp-dev-202601
+   cp app.yaml.example app.yaml
    ```
 
-3. **Create OAuth 2.0 credentials**
+3. **Configure GCP project**
+   ```bash
+   gcloud config set project YOUR-PROJECT-ID
+   ```
+
+4. **Create OAuth 2.0 credentials**
    - Go to [GCP Console > APIs & Services > Credentials](https://console.cloud.google.com/apis/credentials)
    - Create OAuth 2.0 Client ID (Web application)
    - Add authorized redirect URI: `https://YOUR-PROJECT.uc.r.appspot.com/auth/callback`
    - Save Client ID and Client Secret
 
-4. **Update app.yaml**
-   - Add your OAuth credentials
-   - Update `ALLOWED_EMAILS` with authorized user emails
-   - Generate a secure `SECRET_KEY`
+5. **Configure app.yaml**
+   - Generate a secret key:
+     ```bash
+     python3 -c "import secrets; print(secrets.token_hex(32))"
+     ```
+   - Edit `app.yaml` and add:
+     - Your `SECRET_KEY` (from above)
+     - Your `GOOGLE_CLIENT_ID` (from step 4)
+     - Your `GOOGLE_CLIENT_SECRET` (from step 4)
+     - Your `ALLOWED_EMAILS` (comma-separated list)
+     - Update `GOOGLE_CLOUD_PROJECT` if needed
+
+   **Important**: Never commit `app.yaml` to version control!
 
 ### Deploy to App Engine
 

@@ -1,0 +1,45 @@
+# App Engine configuration for Summer Camp Tool - Dev Environment
+#
+# This is a template file. Copy this to app.yaml and fill in your actual credentials.
+# DO NOT commit app.yaml to version control!
+#
+# Setup instructions:
+# 1. Copy this file: cp app.yaml.example app.yaml
+# 2. Fill in your OAuth credentials from GCP Console
+# 3. Generate a secret key: python3 -c "import secrets; print(secrets.token_hex(32))"
+# 4. Add authorized user emails (comma-separated)
+
+runtime: python312
+
+# F1 instance class: smallest and most cost-effective
+# Perfect for development and low-traffic applications (1-2 users)
+instance_class: F1
+
+# Entrypoint tells App Engine which Python module contains the Flask app
+# The format is "module:variable" where main.py contains app = Flask(...)
+entrypoint: gunicorn -b :$PORT main:app
+
+# Environment variables accessible to the application
+env_variables:
+  ENVIRONMENT: 'dev'
+
+  # Flask secret key for session encryption
+  # Generate with: python3 -c "import secrets; print(secrets.token_hex(32))"
+  SECRET_KEY: 'your-secret-key-here'
+
+  # Google OAuth 2.0 credentials
+  # Get these from: https://console.cloud.google.com/apis/credentials
+  GOOGLE_CLIENT_ID: 'your-client-id.apps.googleusercontent.com'
+  GOOGLE_CLIENT_SECRET: 'your-client-secret'
+
+  # Email allowlist - only these users can access the app
+  # Format: comma-separated email addresses
+  ALLOWED_EMAILS: 'user1@gmail.com,user2@gmail.com'
+
+# Automatic scaling configuration
+# These settings keep costs low while allowing the app to scale if needed
+automatic_scaling:
+  min_instances: 0  # Scale down to zero when not in use to save costs
+  max_instances: 1  # Only need one instance for 1-2 users
+  target_cpu_utilization: 0.65
+  target_throughput_utilization: 0.6
