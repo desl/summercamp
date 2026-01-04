@@ -8,7 +8,7 @@ This is ideal for App Engine as Datastore is serverless and scales automatically
 """
 
 import pickle
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from flask.sessions import SessionInterface, SessionMixin
 from werkzeug.datastructures import CallbackDict
 from google.cloud import datastore
@@ -92,7 +92,7 @@ class DatastoreSessionInterface(SessionInterface):
             return DatastoreSession(sid=sid, permanent=True)
 
         # Check if session has expired
-        if 'expires' in entity and entity['expires'] < datetime.utcnow():
+        if 'expires' in entity and entity['expires'] < datetime.now(timezone.utc):
             # Session expired - delete it and create new session
             self.client.delete(key)
             return DatastoreSession(sid=sid, permanent=True)
@@ -133,9 +133,9 @@ class DatastoreSessionInterface(SessionInterface):
         # Calculate session expiration time
         if session.permanent:
             lifetime = app.config['PERMANENT_SESSION_LIFETIME']
-            expires = datetime.utcnow() + timedelta(seconds=lifetime)
+            expires = datetime.now(timezone.utc) + timedelta(seconds=lifetime)
         else:
-            expires = datetime.utcnow() + timedelta(days=1)
+            expires = datetime.now(timezone.utc) + timedelta(days=1)
 
         # Save session to Datastore
         key = self._get_session_key(session.sid)
