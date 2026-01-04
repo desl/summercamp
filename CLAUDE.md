@@ -16,12 +16,12 @@ This is a Summer Camp Organization Tool - a Python/Flask web application to help
 ## Architecture
 
 **Technology Stack:**
-- Backend: Python with Flask framework
+- Backend: Python 3.12 with Flask framework
 - Authentication: Google OAuth (federated identity)
-- Deployment: Serverless (to be determined - likely AWS Lambda or Google Cloud Functions)
+- Deployment: Google App Engine Standard Environment (Python 3.12, F1 instance class)
 - Calendar Integration: Google Calendar API
-- Version Control: GitHub
-- Environments: Dev (test) and Production
+- Version Control: Git (local)
+- Environments: Dev and Production (separate GCP projects)
 
 **Development Philosophy:**
 - Deploy-first approach: Build and deploy to dev environment before local development
@@ -49,11 +49,44 @@ The application manages these core entities (see specification for full details)
 
 ## Deployment
 
-**Environments:**
-- `dev` (test environment) - primary development target
-- `production` - production environment
+**GCP Projects:**
+- **Dev**: `summercamp-dev-202601`
+- **Production**: To be created (will follow pattern: `summercamp-prod-YYYYMM`)
 
-The deployment process and commands will be established during initial setup. There is no local development environment.
+**Project URLs:**
+- Dev: https://summercamp-dev-202601.uc.r.appspot.com
+
+**Common Commands:**
+
+Deploy to dev:
+```bash
+gcloud app deploy --project=summercamp-dev-202601
+```
+
+View logs:
+```bash
+gcloud app logs tail -s default --project=summercamp-dev-202601
+```
+
+Open app in browser:
+```bash
+gcloud app browse --project=summercamp-dev-202601
+```
+
+List deployed versions:
+```bash
+gcloud app versions list --project=summercamp-dev-202601
+```
+
+Rollback to previous version:
+```bash
+# First, list versions to find the version ID
+gcloud app versions list --project=summercamp-dev-202601
+# Then split traffic to route 100% to the desired version
+gcloud app services set-traffic default --splits=VERSION_ID=1 --project=summercamp-dev-202601
+```
+
+**Note:** There is no local development environment. All development is done by deploying to the dev environment.
 
 ## Google Calendar Integration
 
