@@ -133,7 +133,7 @@ class DatastoreSessionInterface(SessionInterface):
         # Calculate session expiration time
         if session.permanent:
             lifetime = app.config['PERMANENT_SESSION_LIFETIME']
-            expires = datetime.utcnow() + lifetime
+            expires = datetime.utcnow() + timedelta(seconds=lifetime)
         else:
             expires = datetime.utcnow() + timedelta(days=1)
 
