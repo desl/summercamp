@@ -1,0 +1,10 @@
+# Flask web framework
+# Used for routing, templating, and request handling
+Flask==3.0.0
+
+# Gunicorn WSGI server
+# App Engine uses this to serve the Flask app in production
+gunicorn==21.2.0
+
+# Werkzeug is a Flask dependency but we pin it for security
+Werkzeug==3.0.1
