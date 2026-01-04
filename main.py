@@ -1,26 +1,49 @@
 """
 Summer Camp Organization Tool - Main Flask Application
 
-This is the entry point for the Flask web application.
-For now, this is a simple "Hello World" to verify deployment works.
+This is the entry point for the Flask web application with Google OAuth authentication.
+Users must authenticate with their Google account and be in the email allowlist to access.
 """
 
 from flask import Flask, render_template
+from config import Config
+from session_datastore import DatastoreSessionInterface
+from auth import auth_bp, login_required, get_current_user
+import os
+
+# Disable HTTPS requirement for OAuth flow in development
+# This is needed because google-auth-oauthlib requires HTTPS by default
+# App Engine provides HTTPS in production, but for local testing we need this
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 # Create the Flask application instance
-# __name__ helps Flask locate templates and static files
 app = Flask(__name__)
+
+# Load configuration from config.py
+# This includes OAuth settings, session config, and email allowlist
+app.config.from_object(Config)
+
+# Initialize custom Datastore session backend
+# This replaces Flask's default cookie-based sessions with server-side sessions
+# stored in Cloud Datastore for better security and scalability
+app.session_interface = DatastoreSessionInterface(app.config['GCP_PROJECT_ID'])
+
+# Register authentication blueprint
+# This adds all the auth routes (/auth/login, /auth/callback, /auth/logout)
+app.register_blueprint(auth_bp)
 
 
 @app.route('/')
+@login_required
 def index():
     """
-    Home page route.
+    Home page / dashboard route.
 
-    Currently displays a simple welcome message to verify deployment.
-    In future iterations, this will show the summer camp planning dashboard.
+    Protected by @login_required - only authenticated users can access.
+    Shows the summer camp planning dashboard with user information.
     """
-    return render_template('index.html')
+    user = get_current_user()
+    return render_template('index.html', user=user)
 
 
 @app.route('/health')
@@ -28,8 +51,8 @@ def health():
     """
     Health check endpoint.
 
-    Used by App Engine and monitoring tools to verify the app is running.
-    Returns a simple JSON response indicating the app is healthy.
+    Unprotected route used by App Engine and monitoring tools to verify
+    the app is running. Does not require authentication.
     """
     return {'status': 'healthy', 'environment': 'dev'}, 200
 

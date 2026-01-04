@@ -8,3 +8,17 @@ gunicorn==21.2.0
 
 # Werkzeug is a Flask dependency but we pin it for security
 Werkzeug==3.0.1
+
+# Google OAuth libraries
+# Official Google libraries for OAuth 2.0 authentication
+google-auth==2.27.0
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+
+# Flask session management
+# Server-side session storage for Flask
+Flask-Session==0.6.0
+
+# Google Cloud Datastore
+# NoSQL database for storing session data and application data
+google-cloud-datastore==2.19.0
