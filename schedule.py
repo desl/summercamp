@@ -346,6 +346,27 @@ def booking_new():
         # Get the weeks needed for this booking
         weeks_needed = week_list[start_week_idx:start_week_idx + duration_weeks]
 
+        # Validate session dates if specified
+        session_start_date = session_entity.get('session_start_date')
+        session_end_date = session_entity.get('session_end_date')
+
+        if session_start_date and session_end_date:
+            # Check that all selected weeks fall within the session's date range (with 1-week buffer on each end)
+            for w in weeks_needed:
+                week_start = w['start_date']
+                week_end = w['end_date']
+
+                # Allow booking if the week overlaps with session dates or is within 1 week before/after
+                buffer_days = 7
+                session_start_with_buffer = session_start_date - timedelta(days=buffer_days)
+                session_end_with_buffer = session_end_date + timedelta(days=buffer_days)
+
+                # Check if week is completely outside the session date range (with buffer)
+                if week_end < session_start_with_buffer or week_start > session_end_with_buffer:
+                    camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], user['email'])
+                    flash(f"Week {w['week_number']} ({week_start.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')}) is outside the date range for {camp['name']} - {session_entity['name']} (runs {session_start_date.strftime('%Y-%m-%d')} to {session_end_date.strftime('%Y-%m-%d')}).", 'error')
+                    return redirect(url_for('schedule.booking_new'))
+
         # Check if any of the needed weeks are blocked by trips
         for w in weeks_needed:
             if w.get('is_blocked'):

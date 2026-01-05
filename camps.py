@@ -251,6 +251,14 @@ def session_new(camp_id):
             registration_datetime_str = f"{request.form['registration_open_date']} {request.form['registration_open_time']}"
             registration_open_date = datetime.strptime(registration_datetime_str, '%Y-%m-%d %H:%M')
 
+        # Parse session date range
+        session_start_date = None
+        session_end_date = None
+        if request.form.get('session_start_date'):
+            session_start_date = datetime.strptime(request.form['session_start_date'], '%Y-%m-%d')
+        if request.form.get('session_end_date'):
+            session_end_date = datetime.strptime(request.form['session_end_date'], '%Y-%m-%d')
+
         # Create the session entity
         session_entity = create_entity(
             client,
@@ -264,6 +272,8 @@ def session_new(camp_id):
                 'grade_min': grade_min,
                 'grade_max': grade_max,
                 'duration_weeks': int(request.form.get('duration_weeks', 1)),
+                'session_start_date': session_start_date,
+                'session_end_date': session_end_date,
                 'holidays': [],  # TODO: Add holiday input in Phase 2
                 'start_time': request.form.get('start_time', ''),
                 'end_time': request.form.get('end_time', ''),
@@ -359,6 +369,14 @@ def session_update(id):
         registration_datetime_str = f"{request.form['registration_open_date']} {request.form['registration_open_time']}"
         registration_open_date = datetime.strptime(registration_datetime_str, '%Y-%m-%d %H:%M')
 
+    # Parse session date range
+    session_start_date = None
+    session_end_date = None
+    if request.form.get('session_start_date'):
+        session_start_date = datetime.strptime(request.form['session_start_date'], '%Y-%m-%d')
+    if request.form.get('session_end_date'):
+        session_end_date = datetime.strptime(request.form['session_end_date'], '%Y-%m-%d')
+
     # Update the session
     update_entity(
         client,
@@ -370,6 +388,8 @@ def session_update(id):
             'grade_min': grade_min,
             'grade_max': grade_max,
             'duration_weeks': int(request.form.get('duration_weeks', 1)),
+            'session_start_date': session_start_date,
+            'session_end_date': session_end_date,
             'start_time': request.form.get('start_time', ''),
             'end_time': request.form.get('end_time', ''),
             'dropoff_window_start': request.form.get('dropoff_window_start', ''),
