@@ -54,3 +54,9 @@ indexes:
   - name: kid_id
   - name: week_id
   - name: state
+
+# Index for Bookings by booking_group_id (for multi-week sessions)
+- kind: Booking
+  properties:
+  - name: user_email
+  - name: booking_group_id

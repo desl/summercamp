@@ -274,42 +274,85 @@ def booking_new():
             flash('Invalid kid, session, or week selected.', 'error')
             return redirect(url_for('schedule.booking_new'))
 
-        # Check if this kid already has a booking with state='booked' for this week
-        if state == 'booked':
-            existing_bookings = query_by_user(
-                client,
-                'Booking',
-                user['email'],
-                filters=[('kid_id', '=', kid_id), ('week_id', '=', week_id), ('state', '=', 'booked')]
-            )
-            if existing_bookings:
-                flash(f"{kid['name']} already has a booked camp for this week. Only one camp can be booked per week.", 'error')
+        # Get session duration for multi-week sessions
+        duration_weeks = session_entity.get('duration_weeks', 1)
+
+        # Get all weeks to determine consecutive weeks for multi-week sessions
+        all_weeks = query_by_user(client, 'Week', user['email'], order_by='week_number')
+        week_list = list(all_weeks)
+
+        # Find the starting week index
+        start_week_idx = None
+        for idx, w in enumerate(week_list):
+            if w.key.name == week_id:
+                start_week_idx = idx
+                break
+
+        if start_week_idx is None:
+            flash('Selected week not found.', 'error')
+            return redirect(url_for('schedule.booking_new'))
+
+        # Check if we have enough consecutive weeks
+        if start_week_idx + duration_weeks > len(week_list):
+            flash(f"Not enough weeks available for this {duration_weeks}-week session.", 'error')
+            return redirect(url_for('schedule.booking_new'))
+
+        # Get the weeks needed for this booking
+        weeks_needed = week_list[start_week_idx:start_week_idx + duration_weeks]
+
+        # Check if any of the needed weeks are blocked by trips
+        for w in weeks_needed:
+            if w.get('is_blocked'):
+                flash(f"Week {w['week_number']} is blocked by a family trip. Cannot book multi-week session.", 'error')
                 return redirect(url_for('schedule.booking_new'))
+
+        # Check if this kid already has a booking with state='booked' for any of these weeks
+        if state == 'booked':
+            for w in weeks_needed:
+                existing_bookings = query_by_user(
+                    client,
+                    'Booking',
+                    user['email'],
+                    filters=[('kid_id', '=', kid_id), ('week_id', '=', w.key.name), ('state', '=', 'booked')]
+                )
+                if existing_bookings:
+                    flash(f"{kid['name']} already has a booked camp for week {w['week_number']}. Only one camp can be booked per week.", 'error')
+                    return redirect(url_for('schedule.booking_new'))
 
         # Parse friends attending
         friends_str = request.form.get('friends_attending', '')
         friends = [f.strip() for f in friends_str.split(',') if f.strip()]
 
-        # Create the booking
-        booking = create_entity(
-            client,
-            'Booking',
-            user['email'],
-            {
-                'kid_id': kid_id,
-                'session_id': session_id,
-                'week_id': week_id,
-                'state': state,
-                'preference_order': int(request.form.get('preference_order', 0)),
-                'friends_attending': friends,
-                'uses_early_care': 'uses_early_care' in request.form,
-                'uses_late_care': 'uses_late_care' in request.form,
-                'notes': request.form.get('notes', ''),
-                'calendar_event_id': None  # Will be set in Phase 3
-            }
-        )
+        # Generate a booking group ID for multi-week sessions
+        booking_group_id = str(uuid.uuid4())
 
-        flash(f"Booking created for {kid['name']}!", 'success')
+        # Create bookings for each week
+        for week_num, w in enumerate(weeks_needed, start=1):
+            booking = create_entity(
+                client,
+                'Booking',
+                user['email'],
+                {
+                    'kid_id': kid_id,
+                    'session_id': session_id,
+                    'week_id': w.key.name,
+                    'state': state,
+                    'preference_order': int(request.form.get('preference_order', 0)),
+                    'friends_attending': friends,
+                    'uses_early_care': 'uses_early_care' in request.form,
+                    'uses_late_care': 'uses_late_care' in request.form,
+                    'notes': request.form.get('notes', ''),
+                    'calendar_event_id': None,
+                    'booking_group_id': booking_group_id,
+                    'week_of_session': week_num,
+                    'total_weeks': duration_weeks
+                }
+            )
+
+        if duration_weeks > 1:
+            flash(f"Multi-week booking created for {kid['name']} ({duration_weeks} weeks)!", 'success')
+        else:
+            flash(f"Booking created for {kid['name']}!", 'success')
         return redirect(url_for('schedule.schedule_view'))
 
     # GET - show form
@@ -475,63 +518,90 @@ def booking_change_state(id):
         flash('Invalid state.', 'error')
         return redirect(url_for('schedule.schedule_view'))
 
-    # Check if transitioning to 'booked'
-    if new_state == 'booked':
-        # Only one booking per kid/week can be 'booked'
-        existing_booked = query_by_user(
+    # Get all bookings in this group (for multi-week sessions)
+    booking_group_id = booking.get('booking_group_id')
+    if booking_group_id:
+        # Get all bookings in the group
+        group_bookings = query_by_user(
             client,
             'Booking',
             user['email'],
-            filters=[
-                ('kid_id', '=', booking['kid_id']),
-                ('week_id', '=', booking['week_id']),
-                ('state', '=', 'booked')
-            ]
+            filters=[('booking_group_id', '=', booking_group_id)]
         )
+    else:
+        # Single booking
+        group_bookings = [booking]
 
-        if existing_booked and existing_booked[0].key.name != id:
-            kid = get_entity_for_user(client, 'Kid', booking['kid_id'], user['email'])
-            flash(f"{kid['name']} already has a booked camp for this week. Only one camp can be booked per week.", 'error')
-            return redirect(url_for('schedule.schedule_view'))
-
-    # Update state
-    update_data = {'state': new_state}
-
-    # If transitioning to 'booked', create calendar event
-    if new_state == 'booked' and 'credentials' in session:
-        # Get related entities for calendar event
-        kid = get_entity_for_user(client, 'Kid', booking['kid_id'], user['email'])
-        session_entity = get_entity_for_user(client, 'Session', booking['session_id'], user['email'])
-        week = get_entity_for_user(client, 'Week', booking['week_id'], user['email'])
-
-        if kid and session_entity and week:
-            camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], user['email'])
-
-            # Get parent for calendar (use first parent or create dummy)
-            parents = query_by_user(client, 'Parent', user['email'])
-            parent = parents[0] if parents else {'name': user['name'], 'email': user['email']}
-
-            # Create calendar event
-            calendar_event_id = create_booking_event(
-                session['credentials'],
-                entity_to_dict(parent),
-                entity_to_dict(kid),
-                entity_to_dict(camp) if camp else {'name': 'Unknown Camp'},
-                entity_to_dict(session_entity),
-                entity_to_dict(week)
+    # Check if transitioning to 'booked' - verify no conflicts for any week in the group
+    if new_state == 'booked':
+        for grp_booking in group_bookings:
+            existing_booked = query_by_user(
+                client,
+                'Booking',
+                user['email'],
+                filters=[
+                    ('kid_id', '=', grp_booking['kid_id']),
+                    ('week_id', '=', grp_booking['week_id']),
+                    ('state', '=', 'booked')
+                ]
             )
 
-            if calendar_event_id:
-                update_data['calendar_event_id'] = calendar_event_id
-                flash(f"Booking state changed to '{new_state}' and added to calendar!", 'success')
-            else:
-                flash(f"Booking state changed to '{new_state}' but calendar event creation failed.", 'warning')
-        else:
-            flash(f"Booking state changed to '{new_state}' but missing data for calendar.", 'warning')
-    else:
-        flash(f"Booking state changed to '{new_state}'!", 'success')
+            # Check if there's a different booking already booked for this week
+            if existing_booked and existing_booked[0].key.name != grp_booking.key.name:
+                kid = get_entity_for_user(client, 'Kid', grp_booking['kid_id'], user['email'])
+                week = get_entity_for_user(client, 'Week', grp_booking['week_id'], user['email'])
+                flash(f"{kid['name']} already has a booked camp for week {week['week_number']}. Only one camp can be booked per week.", 'error')
+                return redirect(url_for('schedule.schedule_view'))
 
-    update_entity(client, booking, update_data)
+    # Update state for all bookings in the group
+    calendar_created = False
+    for grp_booking in group_bookings:
+        update_data = {'state': new_state}
+
+        # If transitioning to 'booked', create calendar event
+        if new_state == 'booked' and 'credentials' in session:
+            # Get related entities for calendar event
+            kid = get_entity_for_user(client, 'Kid', grp_booking['kid_id'], user['email'])
+            session_entity = get_entity_for_user(client, 'Session', grp_booking['session_id'], user['email'])
+            week = get_entity_for_user(client, 'Week', grp_booking['week_id'], user['email'])
+
+            if kid and session_entity and week:
+                camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], user['email'])
+
+                # Get parent for calendar (use first parent or create dummy)
+                parents = query_by_user(client, 'Parent', user['email'])
+                parent = parents[0] if parents else {'name': user['name'], 'email': user['email']}
+
+                # Create calendar event
+                calendar_event_id = create_booking_event(
+                    session['credentials'],
+                    entity_to_dict(parent),
+                    entity_to_dict(kid),
+                    entity_to_dict(camp) if camp else {'name': 'Unknown Camp'},
+                    entity_to_dict(session_entity),
+                    entity_to_dict(week)
+                )
+
+                if calendar_event_id:
+                    update_data['calendar_event_id'] = calendar_event_id
+                    calendar_created = True
+
+        update_entity(client, grp_booking, update_data)
+
+    # Flash appropriate message
+    total_weeks = booking.get('total_weeks', 1)
+    if new_state == 'booked' and calendar_created:
+        if total_weeks > 1:
+            flash(f"Multi-week booking state changed to '{new_state}' and added to calendar ({total_weeks} weeks)!", 'success')
+        else:
+            flash(f"Booking state changed to '{new_state}' and added to calendar!", 'success')
+    elif new_state == 'booked':
+        flash(f"Booking state changed to '{new_state}' but calendar event creation failed.", 'warning')
+    else:
+        if total_weeks > 1:
+            flash(f"Multi-week booking state changed to '{new_state}' ({total_weeks} weeks)!", 'success')
+        else:
+            flash(f"Booking state changed to '{new_state}'!", 'success')
 
     return redirect(url_for('schedule.schedule_view'))
 
@@ -553,17 +623,43 @@ def booking_delete(id):
         flash('Booking not found or access denied.', 'error')
         return redirect(url_for('schedule.schedule_view'))
 
-    # If booking was 'booked' and has a calendar event, delete it
-    if booking.get('state') == 'booked' and booking.get('calendar_event_id') and 'credentials' in session:
-        success = delete_booking_event(session['credentials'], booking['calendar_event_id'])
-        if success:
-            flash('Booking and calendar event deleted successfully.', 'success')
-        else:
-            flash('Booking deleted, but calendar event deletion failed.', 'warning')
+    # Get all bookings in this group (for multi-week sessions)
+    booking_group_id = booking.get('booking_group_id')
+    if booking_group_id:
+        # Get all bookings in the group
+        group_bookings = query_by_user(
+            client,
+            'Booking',
+            user['email'],
+            filters=[('booking_group_id', '=', booking_group_id)]
+        )
     else:
-        flash('Booking deleted successfully.', 'success')
+        # Single booking
+        group_bookings = [booking]
 
-    delete_entity(client, booking)
+    # Delete all bookings and their calendar events
+    calendar_deleted = False
+    for grp_booking in group_bookings:
+        # If booking was 'booked' and has a calendar event, delete it
+        if grp_booking.get('state') == 'booked' and grp_booking.get('calendar_event_id') and 'credentials' in session:
+            success = delete_booking_event(session['credentials'], grp_booking['calendar_event_id'])
+            if success:
+                calendar_deleted = True
+
+        delete_entity(client, grp_booking)
+
+    # Flash appropriate message
+    total_weeks = booking.get('total_weeks', 1)
+    if calendar_deleted:
+        if total_weeks > 1:
+            flash(f'Multi-week booking and calendar events deleted successfully ({total_weeks} weeks).', 'success')
+        else:
+            flash('Booking and calendar event deleted successfully.', 'success')
+    else:
+        if total_weeks > 1:
+            flash(f'Multi-week booking deleted successfully ({total_weeks} weeks).', 'success')
+        else:
+            flash('Booking deleted successfully.', 'success')
 
     return redirect(url_for('schedule.schedule_view'))
 

@@ -231,7 +231,12 @@
                             {% for booking in cell_bookings %}
                             <div class="booking {{ booking.state }}">
                                 <div class="booking-camp">{{ booking.camp_name }}</div>
-                                <div class="booking-session">{{ booking.session_name }}</div>
+                                <div class="booking-session">
+                                    {{ booking.session_name }}
+                                    {% if booking.total_weeks and booking.total_weeks > 1 %}
+                                    <span style="font-size: 10px; opacity: 0.8;"> (week {{ booking.week_of_session }} of {{ booking.total_weeks }})</span>
+                                    {% endif %}
+                                </div>
                                 <div class="booking-actions">
                                     <a href="{{ url_for('schedule.booking_view', id=booking.id) }}" style="text-decoration: none; color: inherit;">
                                         <button type="button">Edit</button>
