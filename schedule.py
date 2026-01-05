@@ -306,18 +306,58 @@ def booking_new():
                 flash(f"Week {w['week_number']} is blocked by a family trip. Cannot book multi-week session.", 'error')
                 return redirect(url_for('schedule.booking_new'))
 
-        # Check if this kid already has a booking with state='booked' for any of these weeks
-        if state == 'booked':
-            for w in weeks_needed:
-                existing_bookings = query_by_user(
-                    client,
-                    'Booking',
-                    user['email'],
-                    filters=[('kid_id', '=', kid_id), ('week_id', '=', w.key.name), ('state', '=', 'booked')]
-                )
-                if existing_bookings:
-                    flash(f"{kid['name']} already has a booked camp for week {w['week_number']}. Only one camp can be booked per week.", 'error')
-                    return redirect(url_for('schedule.booking_new'))
+        # Check for booking collisions with existing bookings
+        collision_warnings = []
+        has_booked_conflict = False
+
+        for w in weeks_needed:
+            existing_bookings = query_by_user(
+                client,
+                'Booking',
+                user['email'],
+                filters=[('kid_id', '=', kid_id), ('week_id', '=', w.key.name)]
+            )
+
+            if existing_bookings:
+                for existing in existing_bookings:
+                    existing_session = get_entity_for_user(client, 'Session', existing['session_id'], user['email'])
+                    existing_camp = None
+                    if existing_session:
+                        existing_camp = get_entity_for_user(client, 'Camp', existing_session['camp_id'], user['email'])
+
+                    camp_name = existing_camp['name'] if existing_camp else 'Unknown'
+                    session_name = existing_session['name'] if existing_session else 'Unknown'
+
+                    if existing['state'] == 'booked':
+                        has_booked_conflict = True
+                        collision_warnings.append(
+                            f"Week {w['week_number']}: {kid['name']} already has a BOOKED camp ({camp_name} - {session_name})"
+                        )
+                    else:
+                        collision_warnings.append(
+                            f"Week {w['week_number']}: {kid['name']} has an existing {existing['state']} for {camp_name} - {session_name}"
+                        )
+
+        # If trying to book and there are ANY conflicts (even ideas/preferred), prevent it
+        if state == 'booked' and collision_warnings:
+            flash(f"Cannot book this camp. {kid['name']} has conflicts:", 'error')
+            for warning in collision_warnings:
+                flash(warning, 'warning')
+            return redirect(url_for('schedule.booking_new'))
+
+        # If trying to create as idea/preferred but there's a booked conflict, prevent it
+        if has_booked_conflict:
+            flash(f"Cannot add this booking. {kid['name']} already has booked camps for these weeks:", 'error')
+            for warning in collision_warnings:
+                if 'BOOKED' in warning:
+                    flash(warning, 'error')
+            return redirect(url_for('schedule.booking_new'))
+
+        # If there are non-booked collisions, warn but allow
+        if collision_warnings:
+            flash(f"Warning: This booking conflicts with existing bookings for {kid['name']}:", 'warning')
+            for warning in collision_warnings:
+                flash(warning, 'info')
 
         # Parse friends attending
         friends_str = request.form.get('friends_attending', '')
@@ -534,24 +574,49 @@ def booking_change_state(id):
 
     # Check if transitioning to 'booked' - verify no conflicts for any week in the group
     if new_state == 'booked':
+        collision_warnings = []
+
         for grp_booking in group_bookings:
-            existing_booked = query_by_user(
+            # Check for ANY other bookings (different booking_group_id) for this kid/week
+            all_bookings_for_week = query_by_user(
                 client,
                 'Booking',
                 user['email'],
                 filters=[
                     ('kid_id', '=', grp_booking['kid_id']),
-                    ('week_id', '=', grp_booking['week_id']),
-                    ('state', '=', 'booked')
+                    ('week_id', '=', grp_booking['week_id'])
                 ]
             )
 
-            # Check if there's a different booking already booked for this week
-            if existing_booked and existing_booked[0].key.name != grp_booking.key.name:
+            # Check if there are other bookings (different booking group)
+            for other_booking in all_bookings_for_week:
+                # Skip bookings in the same group
+                if booking_group_id and other_booking.get('booking_group_id') == booking_group_id:
+                    continue
+                if other_booking.key.name == grp_booking.key.name:
+                    continue
+
+                # Found a conflicting booking
                 kid = get_entity_for_user(client, 'Kid', grp_booking['kid_id'], user['email'])
                 week = get_entity_for_user(client, 'Week', grp_booking['week_id'], user['email'])
-                flash(f"{kid['name']} already has a booked camp for week {week['week_number']}. Only one camp can be booked per week.", 'error')
-                return redirect(url_for('schedule.schedule_view'))
+
+                other_session = get_entity_for_user(client, 'Session', other_booking['session_id'], user['email'])
+                other_camp = None
+                if other_session:
+                    other_camp = get_entity_for_user(client, 'Camp', other_session['camp_id'], user['email'])
+
+                camp_name = other_camp['name'] if other_camp else 'Unknown'
+                session_name = other_session['name'] if other_session else 'Unknown'
+
+                collision_warnings.append(
+                    f"Week {week['week_number']}: {kid['name']} has an existing {other_booking['state']} for {camp_name} - {session_name}"
+                )
+
+        if collision_warnings:
+            flash(f"Cannot promote to 'booked'. There are conflicting bookings:", 'error')
+            for warning in collision_warnings:
+                flash(warning, 'warning')
+            return redirect(url_for('schedule.schedule_view'))
 
     # Update state for all bookings in the group
     calendar_created = False
