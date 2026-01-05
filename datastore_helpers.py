@@ -215,10 +215,15 @@ def entity_to_dict(entity):
     # Add the entity ID (from the key)
     result['id'] = entity.key.name
 
-    # Convert datetime objects to ISO format strings for JSON compatibility
+    # Convert datetime objects to strings for template/form compatibility
     for key, value in result.items():
         if isinstance(value, datetime):
-            result[key] = value.isoformat()
+            # For date fields (no time component), format as YYYY-MM-DD for HTML date inputs
+            # For datetime fields with time, use ISO format
+            if value.hour == 0 and value.minute == 0 and value.second == 0:
+                result[key] = value.strftime('%Y-%m-%d')
+            else:
+                result[key] = value.isoformat()
 
     return result
 

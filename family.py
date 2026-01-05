@@ -215,10 +215,10 @@ def kid_new():
     if request.method == 'POST':
         client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
 
-        # Parse the dates
-        birthday = datetime.strptime(request.form['birthday'], '%Y-%m-%d').date()
-        last_day_of_school = datetime.strptime(request.form['last_day_of_school'], '%Y-%m-%d').date()
-        first_day_of_school = datetime.strptime(request.form['first_day_of_school'], '%Y-%m-%d').date()
+        # Parse the dates (keep as datetime for Datastore compatibility)
+        birthday = datetime.strptime(request.form['birthday'], '%Y-%m-%d')
+        last_day_of_school = datetime.strptime(request.form['last_day_of_school'], '%Y-%m-%d')
+        first_day_of_school = datetime.strptime(request.form['first_day_of_school'], '%Y-%m-%d')
 
         # Parse friends (comma-separated)
         friends_str = request.form.get('friends', '')
@@ -289,10 +289,10 @@ def kid_update(id):
         flash('Kid not found or access denied.', 'error')
         return redirect(url_for('family.kids_list'))
 
-    # Parse the dates
-    birthday = datetime.strptime(request.form['birthday'], '%Y-%m-%d').date()
-    last_day_of_school = datetime.strptime(request.form['last_day_of_school'], '%Y-%m-%d').date()
-    first_day_of_school = datetime.strptime(request.form['first_day_of_school'], '%Y-%m-%d').date()
+    # Parse the dates (keep as datetime for Datastore compatibility)
+    birthday = datetime.strptime(request.form['birthday'], '%Y-%m-%d')
+    last_day_of_school = datetime.strptime(request.form['last_day_of_school'], '%Y-%m-%d')
+    first_day_of_school = datetime.strptime(request.form['first_day_of_school'], '%Y-%m-%d')
 
     # Parse friends (comma-separated)
     friends_str = request.form.get('friends', '')
@@ -384,9 +384,9 @@ def trip_new():
     if request.method == 'POST':
         client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
 
-        # Parse the dates
-        start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
-        end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
+        # Parse the dates (keep as datetime for Datastore compatibility)
+        start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d')
+        end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d')
 
         # Validate dates
         if end_date < start_date:
@@ -458,9 +458,9 @@ def trip_update(id):
         flash('Trip not found or access denied.', 'error')
         return redirect(url_for('family.trips_list'))
 
-    # Parse the dates
-    start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
-    end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
+    # Parse the dates (keep as datetime for Datastore compatibility)
+    start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d')
+    end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d')
 
     # Validate dates
     if end_date < start_date:
