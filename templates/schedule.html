@@ -173,6 +173,9 @@
         <form method="POST" action="{{ url_for('schedule.weeks_recalculate') }}" style="display: inline;">
             <button type="submit" class="btn btn-secondary">Recalculate Weeks</button>
         </form>
+        <form method="POST" action="{{ url_for('schedule.bookings_cleanup') }}" style="display: inline;">
+            <button type="submit" class="btn btn-secondary">Cleanup Legacy Bookings</button>
+        </form>
     </div>
 </div>
 

@@ -193,6 +193,52 @@ def weeks_recalculate():
     return redirect(url_for('schedule.weeks_list'))
 
 
+@schedule_bp.route('/bookings/cleanup', methods=['POST'])
+@login_required
+def bookings_cleanup():
+    """
+    Cleanup legacy bookings that don't have multi-week fields.
+
+    Why: Bookings created before multi-week implementation need migration.
+    """
+    user = get_current_user()
+    client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
+
+    # Get all bookings
+    all_bookings = query_by_user(client, 'Booking', user['email'])
+
+    updated_count = 0
+    for booking in all_bookings:
+        needs_update = False
+        updates = {}
+
+        # Add booking_group_id if missing (use booking's own ID for single-week legacy bookings)
+        if not booking.get('booking_group_id'):
+            updates['booking_group_id'] = booking.key.name
+            needs_update = True
+
+        # Add week_of_session if missing
+        if booking.get('week_of_session') is None:
+            updates['week_of_session'] = 1
+            needs_update = True
+
+        # Add total_weeks if missing
+        if not booking.get('total_weeks'):
+            updates['total_weeks'] = 1
+            needs_update = True
+
+        if needs_update:
+            update_entity(client, booking, updates)
+            updated_count += 1
+
+    if updated_count > 0:
+        flash(f'Cleaned up {updated_count} legacy bookings.', 'success')
+    else:
+        flash('No legacy bookings found that need cleanup.', 'info')
+
+    return redirect(url_for('schedule.schedule_view'))
+
+
 # ============================================================================
 # BOOKING ROUTES
 # ============================================================================
@@ -692,37 +738,54 @@ def booking_delete(id):
     booking_group_id = booking.get('booking_group_id')
     if booking_group_id:
         # Get all bookings in the group
-        group_bookings = query_by_user(
-            client,
-            'Booking',
-            user['email'],
-            filters=[('booking_group_id', '=', booking_group_id)]
-        )
+        try:
+            group_bookings = query_by_user(
+                client,
+                'Booking',
+                user['email'],
+                filters=[('booking_group_id', '=', booking_group_id)]
+            )
+        except Exception as e:
+            # If query fails, just delete the single booking
+            print(f"Error querying booking group: {e}")
+            group_bookings = [booking]
     else:
-        # Single booking
+        # Single booking (including legacy bookings without booking_group_id)
         group_bookings = [booking]
 
     # Delete all bookings and their calendar events
     calendar_deleted = False
-    for grp_booking in group_bookings:
-        # If booking was 'booked' and has a calendar event, delete it
-        if grp_booking.get('state') == 'booked' and grp_booking.get('calendar_event_id') and 'credentials' in session:
-            success = delete_booking_event(session['credentials'], grp_booking['calendar_event_id'])
-            if success:
-                calendar_deleted = True
+    bookings_deleted = 0
 
-        delete_entity(client, grp_booking)
+    for grp_booking in group_bookings:
+        try:
+            # If booking was 'booked' and has a calendar event, delete it
+            if grp_booking.get('state') == 'booked' and grp_booking.get('calendar_event_id') and 'credentials' in session:
+                try:
+                    success = delete_booking_event(session['credentials'], grp_booking['calendar_event_id'])
+                    if success:
+                        calendar_deleted = True
+                except Exception as e:
+                    print(f"Error deleting calendar event: {e}")
+
+            delete_entity(client, grp_booking)
+            bookings_deleted += 1
+        except Exception as e:
+            print(f"Error deleting booking {grp_booking.key.name}: {e}")
+            flash(f'Error deleting booking: {str(e)}', 'error')
 
     # Flash appropriate message
     total_weeks = booking.get('total_weeks', 1)
-    if calendar_deleted:
-        if total_weeks > 1:
-            flash(f'Multi-week booking and calendar events deleted successfully ({total_weeks} weeks).', 'success')
+    if bookings_deleted == 0:
+        flash('Failed to delete booking.', 'error')
+    elif calendar_deleted:
+        if total_weeks > 1 or bookings_deleted > 1:
+            flash(f'Multi-week booking and calendar events deleted successfully ({bookings_deleted} weeks).', 'success')
         else:
             flash('Booking and calendar event deleted successfully.', 'success')
     else:
-        if total_weeks > 1:
-            flash(f'Multi-week booking deleted successfully ({total_weeks} weeks).', 'success')
+        if total_weeks > 1 or bookings_deleted > 1:
+            flash(f'Multi-week booking deleted successfully ({bookings_deleted} weeks).', 'success')
         else:
             flash('Booking deleted successfully.', 'success')
 
