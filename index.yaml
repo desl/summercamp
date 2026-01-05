@@ -1,0 +1,36 @@
+indexes:
+# Composite indexes for Cloud Datastore
+#
+# These indexes are required for queries that filter by user_email
+# and order by another property. Single-property indexes are created
+# automatically, but composite indexes must be explicitly defined.
+
+# Index for Kids list (filter by user_email, order by name)
+- kind: Kid
+  properties:
+  - name: user_email
+  - name: name
+
+# Index for Camps list (filter by user_email, order by name)
+- kind: Camp
+  properties:
+  - name: user_email
+  - name: name
+
+# Index for Parents list (filter by user_email, order by name)
+- kind: Parent
+  properties:
+  - name: user_email
+  - name: name
+
+# Index for Trips list (filter by user_email, order by start_date)
+- kind: Trip
+  properties:
+  - name: user_email
+  - name: start_date
+
+# Index for Sessions by camp (filter by user_email and camp_id)
+- kind: Session
+  properties:
+  - name: user_email
+  - name: camp_id
