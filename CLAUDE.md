@@ -12,6 +12,7 @@ This is a Summer Camp Organization Tool - a Python/Flask web application to help
 - Comments should explain "why", not "what"
 - Mobile and desktop browser support required
 - Serverless architecture preferred for small user base (1-2 users initially)
+- Secrets should always be kept out of source code, even for quick things. The repo will be publicly available.
 
 ## Architecture
 
