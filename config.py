@@ -31,10 +31,12 @@ class Config:
     # - openid: Basic OpenID Connect authentication
     # - userinfo.email: User's email address
     # - userinfo.profile: User's basic profile info (name, picture)
+    # - calendar.events: Manage calendar events (for camp bookings and reminders)
     GOOGLE_OAUTH_SCOPES = [
         'openid',
         'https://www.googleapis.com/auth/userinfo.email',
-        'https://www.googleapis.com/auth/userinfo.profile'
+        'https://www.googleapis.com/auth/userinfo.profile',
+        'https://www.googleapis.com/auth/calendar.events'
     ]
 
     # Email allowlist - only these users can access the application

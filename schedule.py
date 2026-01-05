@@ -28,6 +28,11 @@ from datastore_helpers import (
     entity_to_dict,
     entities_to_dict_list
 )
+from calendar_integration import (
+    create_booking_event,
+    update_booking_event,
+    delete_booking_event
+)
 from datetime import datetime, timedelta
 import uuid
 
@@ -412,7 +417,36 @@ def booking_update(id):
         }
     )
 
-    flash('Booking updated successfully!', 'success')
+    # If booking is 'booked' and has a calendar event, update it
+    if booking.get('state') == 'booked' and booking.get('calendar_event_id') and 'credentials' in session:
+        kid = get_entity_for_user(client, 'Kid', booking['kid_id'], user['email'])
+        session_entity = get_entity_for_user(client, 'Session', booking['session_id'], user['email'])
+        week = get_entity_for_user(client, 'Week', booking['week_id'], user['email'])
+
+        if kid and session_entity and week:
+            camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], user['email'])
+            parents = query_by_user(client, 'Parent', user['email'])
+            parent = parents[0] if parents else {'name': user['name'], 'email': user['email']}
+
+            success = update_booking_event(
+                session['credentials'],
+                booking['calendar_event_id'],
+                entity_to_dict(parent),
+                entity_to_dict(kid),
+                entity_to_dict(camp) if camp else {'name': 'Unknown Camp'},
+                entity_to_dict(session_entity),
+                entity_to_dict(week)
+            )
+
+            if success:
+                flash('Booking and calendar event updated successfully!', 'success')
+            else:
+                flash('Booking updated, but calendar update failed.', 'warning')
+        else:
+            flash('Booking updated successfully!', 'success')
+    else:
+        flash('Booking updated successfully!', 'success')
+
     return redirect(url_for('schedule.schedule_view'))
 
 
@@ -461,10 +495,43 @@ def booking_change_state(id):
             return redirect(url_for('schedule.schedule_view'))
 
     # Update state
-    update_entity(client, booking, {'state': new_state})
+    update_data = {'state': new_state}
 
-    flash(f"Booking state changed to '{new_state}'!", 'success')
-    # TODO Phase 3: If state='booked', create calendar event
+    # If transitioning to 'booked', create calendar event
+    if new_state == 'booked' and 'credentials' in session:
+        # Get related entities for calendar event
+        kid = get_entity_for_user(client, 'Kid', booking['kid_id'], user['email'])
+        session_entity = get_entity_for_user(client, 'Session', booking['session_id'], user['email'])
+        week = get_entity_for_user(client, 'Week', booking['week_id'], user['email'])
+
+        if kid and session_entity and week:
+            camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], user['email'])
+
+            # Get parent for calendar (use first parent or create dummy)
+            parents = query_by_user(client, 'Parent', user['email'])
+            parent = parents[0] if parents else {'name': user['name'], 'email': user['email']}
+
+            # Create calendar event
+            calendar_event_id = create_booking_event(
+                session['credentials'],
+                entity_to_dict(parent),
+                entity_to_dict(kid),
+                entity_to_dict(camp) if camp else {'name': 'Unknown Camp'},
+                entity_to_dict(session_entity),
+                entity_to_dict(week)
+            )
+
+            if calendar_event_id:
+                update_data['calendar_event_id'] = calendar_event_id
+                flash(f"Booking state changed to '{new_state}' and added to calendar!", 'success')
+            else:
+                flash(f"Booking state changed to '{new_state}' but calendar event creation failed.", 'warning')
+        else:
+            flash(f"Booking state changed to '{new_state}' but missing data for calendar.", 'warning')
+    else:
+        flash(f"Booking state changed to '{new_state}'!", 'success')
+
+    update_entity(client, booking, update_data)
 
     return redirect(url_for('schedule.schedule_view'))
 
@@ -486,10 +553,17 @@ def booking_delete(id):
         flash('Booking not found or access denied.', 'error')
         return redirect(url_for('schedule.schedule_view'))
 
-    delete_entity(client, booking)
+    # If booking was 'booked' and has a calendar event, delete it
+    if booking.get('state') == 'booked' and booking.get('calendar_event_id') and 'credentials' in session:
+        success = delete_booking_event(session['credentials'], booking['calendar_event_id'])
+        if success:
+            flash('Booking and calendar event deleted successfully.', 'success')
+        else:
+            flash('Booking deleted, but calendar event deletion failed.', 'warning')
+    else:
+        flash('Booking deleted successfully.', 'success')
 
-    flash('Booking deleted successfully.', 'success')
-    # TODO Phase 3: If state was 'booked', delete calendar event
+    delete_entity(client, booking)
 
     return redirect(url_for('schedule.schedule_view'))
 

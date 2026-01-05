@@ -22,3 +22,11 @@ Flask-Session==0.6.0
 # Google Cloud Datastore
 # NoSQL database for storing session data and application data
 google-cloud-datastore==2.19.0
+
+# Google Calendar API
+# Used to create calendar events for booked camps and registration reminders
+google-api-python-client==2.111.0
+
+# Date utilities
+# Used for parsing and formatting dates in calendar integration
+python-dateutil==2.8.2
