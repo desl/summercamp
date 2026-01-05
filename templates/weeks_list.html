@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Summer Weeks - Summer Camp Tool{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Summer Weeks</h1>
+    <form method="POST" action="{{ url_for('schedule.weeks_recalculate') }}" style="display: inline;">
+        <button type="submit" class="btn btn-primary">Recalculate Weeks</button>
+    </form>
+</div>
+
+<p style="color: #6c757d; margin-bottom: 30px;">
+    Summer weeks are automatically calculated from your kids' school dates. The first week starts the Monday after the last day of school,
+    and weeks continue until the day before school starts in the fall.
+</p>
+
+{% if weeks %}
+<table>
+    <thead>
+        <tr>
+            <th>Week #</th>
+            <th>Start Date</th>
+            <th>End Date</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for week in weeks %}
+        <tr>
+            <td><strong>Week {{ week.week_number }}</strong></td>
+            <td>{{ week.start_date }}</td>
+            <td>{{ week.end_date }}</td>
+            <td>
+                {% if week.is_blocked %}
+                <span style="background-color: #f8d7da; color: #721c24; padding: 4px 10px; border-radius: 12px; font-size: 13px;">
+                    🚫 Blocked by Trip
+                </span>
+                {% else %}
+                <span style="background-color: #d4edda; color: #155724; padding: 4px 10px; border-radius: 12px; font-size: 13px;">
+                    ✓ Available
+                </span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div style="background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; border-radius: 4px; margin-top: 30px;">
+    <strong>Tip:</strong> If you add or update kids' school dates, or add/remove trips, click "Recalculate Weeks" to update the summer schedule.
+</div>
+{% else %}
+<div style="background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 20px; border-radius: 4px; text-align: center;">
+    <p style="margin: 0; font-size: 16px;">
+        <strong>No weeks calculated yet.</strong>
+    </p>
+    <p style="margin: 10px 0 0 0;">
+        Make sure you have kids with school dates set, then click "Recalculate Weeks" to generate the summer schedule.
+    </p>
+    <form method="POST" action="{{ url_for('schedule.weeks_recalculate') }}" style="display: inline; margin-top: 15px;">
+        <button type="submit" class="btn btn-primary">Recalculate Weeks Now</button>
+    </form>
+</div>
+{% endif %}
+{% endblock %}

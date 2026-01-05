@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+
+{% block title %}Schedule - Summer Camp Tool{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .schedule-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+    }
+
+    .schedule-grid {
+        overflow-x: auto;
+        margin-top: 20px;
+    }
+
+    .schedule-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 800px;
+    }
+
+    .schedule-table th {
+        background-color: #2c3e50;
+        color: white;
+        padding: 12px 8px;
+        text-align: center;
+        font-size: 13px;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .schedule-table th.kid-header {
+        text-align: left;
+        min-width: 150px;
+    }
+
+    .schedule-table td {
+        border: 1px solid #dee2e6;
+        padding: 8px;
+        vertical-align: top;
+        min-width: 120px;
+        height: 100px;
+    }
+
+    .schedule-table td.kid-name {
+        font-weight: 600;
+        background-color: #f8f9fa;
+        position: sticky;
+        left: 0;
+        z-index: 5;
+    }
+
+    .week-cell {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .week-cell:hover {
+        background-color: #f8f9fa;
+    }
+
+    .week-cell.blocked {
+        background-color: #e9ecef;
+        cursor: not-allowed;
+    }
+
+    .week-cell.blocked:hover {
+        background-color: #e9ecef;
+    }
+
+    .booking {
+        margin-bottom: 6px;
+        padding: 6px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .booking.idea {
+        background-color: #d1ecf1;
+        border: 1px solid #bee5eb;
+        color: #0c5460;
+    }
+
+    .booking.preferred {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        color: #856404;
+    }
+
+    .booking.booked {
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+        font-weight: 500;
+    }
+
+    .booking-camp {
+        font-weight: 600;
+        margin-bottom: 2px;
+    }
+
+    .booking-session {
+        font-size: 11px;
+        opacity: 0.9;
+    }
+
+    .booking-actions {
+        margin-top: 4px;
+        display: flex;
+        gap: 4px;
+    }
+
+    .booking-actions button {
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        border: none;
+        cursor: pointer;
+        background-color: rgba(0,0,0,0.1);
+        color: inherit;
+    }
+
+    .booking-actions button:hover {
+        background-color: rgba(0,0,0,0.2);
+    }
+
+    .add-booking-btn {
+        display: inline-block;
+        padding: 6px 10px;
+        background-color: #4285f4;
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+        font-size: 12px;
+        text-align: center;
+    }
+
+    .add-booking-btn:hover {
+        background-color: #3367d6;
+    }
+
+    .blocked-indicator {
+        color: #6c757d;
+        font-size: 12px;
+        font-style: italic;
+    }
+
+    @media (max-width: 768px) {
+        .schedule-grid {
+            font-size: 11px;
+        }
+
+        .schedule-table th,
+        .schedule-table td {
+            padding: 6px 4px;
+            min-width: 100px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="schedule-actions">
+    <h1 style="margin: 0;">Summer Schedule</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('schedule.booking_new') }}" class="btn btn-success">+ Add Booking</a>
+        <form method="POST" action="{{ url_for('schedule.weeks_recalculate') }}" style="display: inline;">
+            <button type="submit" class="btn btn-secondary">Recalculate Weeks</button>
+        </form>
+    </div>
+</div>
+
+{% if not kids %}
+<div style="background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 20px; border-radius: 4px; text-align: center;">
+    <p style="margin: 0; font-size: 16px;">
+        <strong>No kids added yet.</strong>
+    </p>
+    <p style="margin: 10px 0 0 0;">
+        Add kids with their school dates first, then calculate weeks to see the schedule grid.
+    </p>
+    <a href="{{ url_for('family.kids_list') }}" class="btn btn-primary" style="margin-top: 15px;">Add Kids</a>
+</div>
+{% elif not weeks %}
+<div style="background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 20px; border-radius: 4px; text-align: center;">
+    <p style="margin: 0; font-size: 16px;">
+        <strong>No weeks calculated yet.</strong>
+    </p>
+    <p style="margin: 10px 0 0 0;">
+        Click "Recalculate Weeks" to generate the summer schedule based on your kids' school dates.
+    </p>
+    <form method="POST" action="{{ url_for('schedule.weeks_recalculate') }}" style="display: inline; margin-top: 15px;">
+        <button type="submit" class="btn btn-primary">Recalculate Weeks</button>
+    </form>
+</div>
+{% else %}
+<!-- Schedule Grid -->
+<div class="schedule-grid">
+    <table class="schedule-table">
+        <thead>
+            <tr>
+                <th class="kid-header">Kid</th>
+                {% for week in weeks %}
+                <th>
+                    Week {{ week.week_number }}<br>
+                    <span style="font-size: 11px; font-weight: normal;">
+                        {{ week.start_date }} to {{ week.end_date }}
+                    </span>
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for kid in kids %}
+            <tr>
+                <td class="kid-name">{{ kid.name }}</td>
+                {% for week in weeks %}
+                <td class="week-cell {% if week.is_blocked %}blocked{% endif %}">
+                    {% if week.is_blocked %}
+                        <div class="blocked-indicator">🚫 Trip Blocked</div>
+                    {% else %}
+                        {% set cell_key = (kid.id, week.id) %}
+                        {% set cell_bookings = bookings_lookup.get(cell_key, []) %}
+
+                        {% if cell_bookings %}
+                            {% for booking in cell_bookings %}
+                            <div class="booking {{ booking.state }}">
+                                <div class="booking-camp">{{ booking.camp_name }}</div>
+                                <div class="booking-session">{{ booking.session_name }}</div>
+                                <div class="booking-actions">
+                                    <a href="{{ url_for('schedule.booking_view', id=booking.id) }}" style="text-decoration: none; color: inherit;">
+                                        <button type="button">Edit</button>
+                                    </a>
+                                    {% if booking.state != 'booked' %}
+                                    <form method="POST" action="{{ url_for('schedule.booking_change_state', id=booking.id) }}" style="display: inline;">
+                                        {% if booking.state == 'idea' %}
+                                        <input type="hidden" name="state" value="preferred">
+                                        <button type="submit">→ Pref</button>
+                                        {% elif booking.state == 'preferred' %}
+                                        <input type="hidden" name="state" value="booked">
+                                        <button type="submit">→ Book</button>
+                                        {% endif %}
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <a href="{{ url_for('schedule.booking_new') }}?kid_id={{ kid.id }}&week_id={{ week.id }}" class="add-booking-btn">+ Add</a>
+                        {% endif %}
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Legend -->
+<div style="margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 6px;">
+    <h3 style="margin-top: 0;">Legend</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 20px; height: 20px; background-color: #d1ecf1; border: 1px solid #bee5eb; border-radius: 3px;"></div>
+            <span><strong>Idea:</strong> Considering this camp</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 20px; height: 20px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 3px;"></div>
+            <span><strong>Preferred:</strong> Top choice(s)</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 20px; height: 20px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 3px;"></div>
+            <span><strong>Booked:</strong> Confirmed registration</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 20px; height: 20px; background-color: #e9ecef; border: 1px solid #dee2e6; border-radius: 3px;"></div>
+            <span><strong>Blocked:</strong> Family trip</span>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

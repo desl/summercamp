@@ -34,3 +34,23 @@ indexes:
   properties:
   - name: user_email
   - name: camp_id
+
+# Index for Weeks (filter by user_email, order by week_number)
+- kind: Week
+  properties:
+  - name: user_email
+  - name: week_number
+
+# Index for Bookings by kid and week (filter by user_email, kid_id, week_id)
+- kind: Booking
+  properties:
+  - name: user_email
+  - name: kid_id
+  - name: week_id
+
+# Index for Bookings by kid, week, and state (for conflict detection)
+- kind: Booking
+  properties:
+  - name: kid_id
+  - name: week_id
+  - name: state

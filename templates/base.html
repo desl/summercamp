@@ -357,6 +357,7 @@
             <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}class="active"{% endif %}>Dashboard</a>
             <a href="{{ url_for('family.kids_list') }}" {% if request.endpoint and request.endpoint.startswith('family.kids') %}class="active"{% endif %}>Kids</a>
             <a href="{{ url_for('camps.camps_list') }}" {% if request.endpoint and request.endpoint.startswith('camps.') %}class="active"{% endif %}>Camps</a>
+            <a href="{{ url_for('schedule.schedule_view') }}" {% if request.endpoint and request.endpoint.startswith('schedule.') %}class="active"{% endif %}>Schedule</a>
             <a href="{{ url_for('family.trips_list') }}" {% if request.endpoint and request.endpoint.startswith('family.trips') %}class="active"{% endif %}>Trips</a>
             <a href="{{ url_for('family.parents_list') }}" {% if request.endpoint and request.endpoint.startswith('family.parents') %}class="active"{% endif %}>Parents</a>
         </div>

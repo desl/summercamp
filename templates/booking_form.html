@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}{% if booking %}Edit Booking{% else %}Add Booking{% endif %} - Summer Camp Tool{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+
+    @media (max-width: 768px) {
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>{% if booking %}Edit Booking{% else %}Add Booking{% endif %}</h1>
+
+<p style="color: #6c757d; margin-bottom: 30px;">
+    {% if booking %}
+    Update booking details and state.
+    {% else %}
+    Add a new camp booking for one of your kids. Bookings start as "ideas" and can be promoted to "preferred" and then "booked".
+    {% endif %}
+</p>
+
+<form method="POST" action="{% if booking %}{{ url_for('schedule.booking_update', id=booking.id) }}{% else %}{{ url_for('schedule.booking_new') }}{% endif %}">
+    {% if not booking %}
+    <!-- Kid, Session, Week selection (only for new bookings) -->
+    <div class="form-row">
+        <div class="form-group">
+            <label for="kid_id">Kid *</label>
+            <select id="kid_id" name="kid_id" required>
+                <option value="">Select a kid</option>
+                {% for kid in kids %}
+                <option value="{{ kid.id }}" {% if request.args.get('kid_id') == kid.id %}selected{% endif %}>{{ kid.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="week_id">Week *</label>
+            <select id="week_id" name="week_id" required>
+                <option value="">Select a week</option>
+                {% for week in weeks %}
+                <option value="{{ week.id }}" {% if request.args.get('week_id') == week.id %}selected{% endif %}>
+                    Week {{ week.week_number }} ({{ week.start_date }} to {{ week.end_date }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="session_id">Camp Session *</label>
+        <select id="session_id" name="session_id" required>
+            <option value="">Select a camp session</option>
+            {% for camp in camps %}
+                <optgroup label="{{ camp.name }}">
+                    {% for session in sessions_by_camp.get(camp.id, []) %}
+                    <option value="{{ session.id }}">
+                        {{ session.name }}
+                        {% if session.cost %}(${{"%.2f"|format(session.cost)}}){% endif %}
+                    </option>
+                    {% endfor %}
+                </optgroup>
+            {% endfor %}
+        </select>
+        <small>Choose the specific camp session for this booking</small>
+    </div>
+
+    <div class="form-group">
+        <label for="state">State *</label>
+        <select id="state" name="state" required>
+            <option value="idea" selected>Idea - Just considering</option>
+            <option value="preferred">Preferred - One of top choices</option>
+            <option value="booked">Booked - Confirmed registration</option>
+        </select>
+        <small>Bookings start as ideas and progress to preferred/booked</small>
+    </div>
+    {% else %}
+    <!-- For editing, show current kid/session/week (read-only) -->
+    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+        <p style="margin: 5px 0;"><strong>Kid:</strong> (Set when creating - cannot change)</p>
+        <p style="margin: 5px 0;"><strong>Week:</strong> (Set when creating - cannot change)</p>
+        <p style="margin: 5px 0;"><strong>Session:</strong> (Set when creating - cannot change)</p>
+        <p style="margin: 5px 0; font-size: 13px; color: #6c757d;">To change these, delete this booking and create a new one.</p>
+    </div>
+    {% endif %}
+
+    <!-- Booking Details (for both new and edit) -->
+    <h3 style="margin-top: 30px;">Booking Details</h3>
+
+    <div class="form-group">
+        <label for="preference_order">Preference Order</label>
+        <input type="number" id="preference_order" name="preference_order" min="0" max="10"
+               value="{% if booking %}{{ booking.preference_order }}{% else %}0{% endif %}">
+        <small>Rank this option (1 = first choice, 2 = second choice, etc.). Use 0 for no preference.</small>
+    </div>
+
+    <div class="form-group">
+        <label for="friends_attending">Friends Attending</label>
+        <textarea id="friends_attending" name="friends_attending" rows="2" placeholder="Enter friend names, separated by commas">{% if booking and booking.friends_attending %}{{ booking.friends_attending|join(', ') }}{% endif %}</textarea>
+        <small>Which of your kid's friends will be attending this session?</small>
+    </div>
+
+    <div class="form-row">
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="uses_early_care" {% if booking and booking.uses_early_care %}checked{% endif %}>
+                Uses Early Care
+            </label>
+            <small>Check if you'll use early drop-off</small>
+        </div>
+
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="uses_late_care" {% if booking and booking.uses_late_care %}checked{% endif %}>
+                Uses Late Care
+            </label>
+            <small>Check if you'll use late pick-up</small>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="notes">Notes</label>
+        <textarea id="notes" name="notes" rows="3" placeholder="Any special notes about this booking">{% if booking %}{{ booking.notes }}{% endif %}</textarea>
+        <small>Optional notes (e.g., registration deadline, special requirements, carpooling plans)</small>
+    </div>
+
+    <!-- Submit Buttons -->
+    <div style="margin-top: 30px; display: flex; gap: 10px;">
+        <button type="submit" class="btn btn-primary">
+            {% if booking %}Update Booking{% else %}Create Booking{% endif %}
+        </button>
+        <a href="{{ url_for('schedule.schedule_view') }}" class="btn btn-secondary">Cancel</a>
+        {% if booking %}
+        <form method="POST" action="{{ url_for('schedule.booking_delete', id=booking.id) }}" style="display: inline; margin-left: auto;"
+              onsubmit="return confirm('Delete this booking? This cannot be undone.');">
+            <button type="submit" class="btn btn-danger">Delete Booking</button>
+        </form>
+        {% endif %}
+    </div>
+</form>
+{% endblock %}

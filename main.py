@@ -11,6 +11,7 @@ from session_datastore import DatastoreSessionInterface
 from auth import auth_bp, login_required, get_current_user
 from family import family_bp
 from camps import camps_bp
+from schedule import schedule_bp
 import os
 
 # Disable HTTPS requirement for OAuth flow in development
@@ -41,6 +42,10 @@ app.register_blueprint(family_bp)
 # Register camps management blueprint
 # This adds routes for managing camps and sessions (/camps/*)
 app.register_blueprint(camps_bp)
+
+# Register schedule blueprint
+# This adds routes for managing weeks and bookings (/schedule/*)
+app.register_blueprint(schedule_bp)
 
 
 @app.route('/')
