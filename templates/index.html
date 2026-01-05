@@ -1,142 +1,72 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Summer Camp Organization Tool</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            line-height: 1.6;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 0;
-            border-bottom: 2px solid #e9ecef;
-            margin-bottom: 30px;
-        }
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .user-avatar {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            border: 2px solid #dee2e6;
-        }
-        .user-details {
-            display: flex;
-            flex-direction: column;
-        }
-        .user-name {
-            font-weight: 600;
-            color: #2c3e50;
-            margin: 0;
-        }
-        .user-email {
-            font-size: 14px;
-            color: #6c757d;
-            margin: 0;
-        }
-        .logout-btn {
-            background-color: #dc3545;
-            color: white;
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            text-decoration: none;
-            font-size: 14px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        .logout-btn:hover {
-            background-color: #c82333;
-        }
-        h1 {
-            color: #2c3e50;
-            margin-bottom: 10px;
-        }
-        .welcome-message {
-            color: #495057;
-            margin-bottom: 30px;
-        }
-        .status {
-            background-color: #d4edda;
-            border: 1px solid #c3e6cb;
-            color: #155724;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 30px;
-        }
-        .features-section {
-            background-color: #f8f9fa;
-            border-radius: 6px;
-            padding: 25px;
-        }
-        .features-section h2 {
-            margin-top: 0;
-            color: #495057;
-        }
-        .features-section ul {
-            margin: 15px 0;
-        }
-        .features-section li {
-            margin: 10px 0;
-            color: #6c757d;
-        }
-        .features-section li.done {
-            color: #28a745;
-            font-weight: 500;
-        }
-        .features-section li.done::before {
-            content: "✓ ";
-            color: #28a745;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="user-info">
-            {% if user.picture %}
-            <img src="{{ user.picture }}" alt="{{ user.name }}" class="user-avatar">
-            {% endif %}
-            <div class="user-details">
-                <p class="user-name">{{ user.name }}</p>
-                <p class="user-email">{{ user.email }}</p>
-            </div>
-        </div>
-        <a href="{{ url_for('auth.logout') }}" class="logout-btn">Logout</a>
-    </div>
+{% extends "base.html" %}
 
-    <h1>Summer Camp Organization Tool</h1>
-    <p class="welcome-message">Welcome back, {{ user.name.split()[0] }}! Plan your family's summer camp schedule with ease.</p>
+{% block title %}Dashboard - Summer Camp Organization Tool{% endblock %}
 
-    <div class="status">
-        <strong>Status:</strong> Authentication successful!<br>
-        <strong>Environment:</strong> Development
-    </div>
+{% block content %}
+<h1>Summer Camp Organization Tool</h1>
+<p style="color: #495057; margin-bottom: 30px;">
+    Welcome back, {{ user.name.split()[0] }}! Plan your family's summer camp schedule with ease.
+</p>
 
-    <div class="features-section">
-        <h2>Features</h2>
-        <ul>
-            <li class="done">Google OAuth authentication</li>
-            <li>Track camp ideas and bookings</li>
-            <li>Manage multiple children's schedules</li>
-            <li>Google Calendar integration</li>
-            <li>Registration deadline tracking</li>
-            <li>Coordinate with friends and carpools</li>
-            <li>Track costs and generate summaries</li>
-        </ul>
-        <p style="margin-top: 20px; color: #6c757d; font-size: 14px;">
-            More features coming soon! The app is currently in development.
+<div style="background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 4px; margin-bottom: 30px;">
+    <strong>Phase 1 Complete!</strong> You can now manage kids, camps, parents, and trips.
+</div>
+
+<!-- Quick Actions Grid -->
+<h2>Quick Actions</h2>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 40px;">
+    <!-- Kids Card -->
+    <div style="background-color: white; border: 2px solid #dee2e6; border-radius: 6px; padding: 20px; transition: border-color 0.3s;">
+        <h3 style="margin-top: 0; color: #4285f4;">👦 Kids</h3>
+        <p style="color: #6c757d; font-size: 14px; margin-bottom: 15px;">
+            Manage children and their school dates
         </p>
+        <a href="{{ url_for('family.kids_list') }}" class="btn btn-primary">Manage Kids</a>
     </div>
-</body>
-</html>
+
+    <!-- Camps Card -->
+    <div style="background-color: white; border: 2px solid #dee2e6; border-radius: 6px; padding: 20px;">
+        <h3 style="margin-top: 0; color: #28a745;">🏕️ Camps</h3>
+        <p style="color: #6c757d; font-size: 14px; margin-bottom: 15px;">
+            Add camps and their sessions
+        </p>
+        <a href="{{ url_for('camps.camps_list') }}" class="btn btn-primary">Manage Camps</a>
+    </div>
+
+    <!-- Trips Card -->
+    <div style="background-color: white; border: 2px solid #dee2e6; border-radius: 6px; padding: 20px;">
+        <h3 style="margin-top: 0; color: #ffc107;">✈️ Trips</h3>
+        <p style="color: #6c757d; font-size: 14px; margin-bottom: 15px;">
+            Track family vacations
+        </p>
+        <a href="{{ url_for('family.trips_list') }}" class="btn btn-primary">Manage Trips</a>
+    </div>
+
+    <!-- Parents Card -->
+    <div style="background-color: white; border: 2px solid #dee2e6; border-radius: 6px; padding: 20px;">
+        <h3 style="margin-top: 0; color: #6c757d;">👨‍👩‍👧 Parents</h3>
+        <p style="color: #6c757d; font-size: 14px; margin-bottom: 15px;">
+            Manage parent info for calendar integration
+        </p>
+        <a href="{{ url_for('family.parents_list') }}" class="btn btn-primary">Manage Parents</a>
+    </div>
+</div>
+
+<!-- Features Section -->
+<div style="background-color: #f8f9fa; border-radius: 6px; padding: 25px;">
+    <h2 style="margin-top: 0; color: #495057;">Features</h2>
+    <ul style="margin: 15px 0;">
+        <li style="margin: 10px 0; color: #28a745; font-weight: 500;">✓ Google OAuth authentication</li>
+        <li style="margin: 10px 0; color: #28a745; font-weight: 500;">✓ Manage kids and school dates</li>
+        <li style="margin: 10px 0; color: #28a745; font-weight: 500;">✓ Manage camps and sessions</li>
+        <li style="margin: 10px 0; color: #28a745; font-weight: 500;">✓ Track family trips</li>
+        <li style="margin: 10px 0; color: #6c757d;">Coming in Phase 2: Week calculation and booking workflow</li>
+        <li style="margin: 10px 0; color: #6c757d;">Coming in Phase 2: Schedule grid view</li>
+        <li style="margin: 10px 0; color: #6c757d;">Coming in Phase 3: Google Calendar integration</li>
+        <li style="margin: 10px 0; color: #6c757d;">Coming in Phase 3: Registration deadline tracking</li>
+    </ul>
+    <p style="margin-top: 20px; color: #6c757d; font-size: 14px;">
+        <strong>Next Steps:</strong> Add your kids and their school dates, then add camps and sessions to start planning!
+    </p>
+</div>
+{% endblock %}

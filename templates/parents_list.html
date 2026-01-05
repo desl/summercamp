@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Parents - Summer Camp Tool{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Parents</h1>
+    <a href="{{ url_for('family.parent_new') }}" class="btn btn-primary">+ Add Parent</a>
+</div>
+
+<p style="color: #6c757d; margin-bottom: 30px;">
+    Manage parent information and Google Calendar IDs for calendar integration (Phase 3 feature).
+</p>
+
+{% if parents %}
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Google Calendar ID</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for parent in parents %}
+        <tr>
+            <td><strong>{{ parent.name }}</strong></td>
+            <td>{{ parent.email }}</td>
+            <td>
+                {% if parent.google_calendar_id %}
+                <code style="background-color: #f8f9fa; padding: 2px 6px; border-radius: 3px; font-size: 12px;">{{ parent.google_calendar_id }}</code>
+                {% else %}
+                <span style="color: #6c757d;">Not set</span>
+                {% endif %}
+            </td>
+            <td class="actions">
+                <a href="{{ url_for('family.parent_view', id=parent.id) }}" class="btn btn-secondary">Edit</a>
+                <form method="POST" action="{{ url_for('family.parent_delete', id=parent.id) }}" style="display: inline;"
+                      onsubmit="return confirm('Delete {{ parent.name }}? This cannot be undone.');">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div style="background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 20px; border-radius: 4px; text-align: center;">
+    <p style="margin: 0; font-size: 16px;">
+        <strong>No parents added yet.</strong>
+    </p>
+    <p style="margin: 10px 0 0 0; color: #0c5460;">
+        Parent records are optional but needed for Google Calendar integration (Phase 3).
+    </p>
+    <a href="{{ url_for('family.parent_new') }}" class="btn btn-primary" style="margin-top: 15px;">+ Add Parent</a>
+</div>
+{% endif %}
+{% endblock %}

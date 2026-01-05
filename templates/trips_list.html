@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Trips - Summer Camp Tool{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Family Trips</h1>
+    <a href="{{ url_for('family.trip_new') }}" class="btn btn-primary">+ Add Trip</a>
+</div>
+
+<p style="color: #6c757d; margin-bottom: 30px;">
+    Track family trips and vacations. Trips block off weeks when camps aren't needed (Phase 2 feature).
+</p>
+
+{% if trips %}
+<table>
+    <thead>
+        <tr>
+            <th>Trip Name</th>
+            <th>Start Date</th>
+            <th>End Date</th>
+            <th>Duration</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for trip in trips %}
+        <tr>
+            <td><strong>{{ trip.name }}</strong></td>
+            <td>{{ trip.start_date }}</td>
+            <td>{{ trip.end_date }}</td>
+            <td>
+                {# Calculate duration in days #}
+                {% set start = trip.start_date %}
+                {% set end = trip.end_date %}
+                <span style="color: #6c757d; font-size: 13px;">
+                    {# Simple duration display - actual calculation would need Python #}
+                    Multiple days
+                </span>
+            </td>
+            <td class="actions">
+                <a href="{{ url_for('family.trip_view', id=trip.id) }}" class="btn btn-secondary">Edit</a>
+                <form method="POST" action="{{ url_for('family.trip_delete', id=trip.id) }}" style="display: inline;"
+                      onsubmit="return confirm('Delete {{ trip.name }}? This cannot be undone.');">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div style="background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; border-radius: 4px; margin-top: 20px;">
+    <strong>Note:</strong> Week blocking based on trips will be implemented in Phase 2. For now, you can track your trips here.
+</div>
+{% else %}
+<div style="background-color: #f8f9fa; border: 1px solid #dee2e6; color: #495057; padding: 20px; border-radius: 4px; text-align: center;">
+    <p style="margin: 0; font-size: 16px;">
+        <strong>No trips added yet.</strong>
+    </p>
+    <p style="margin: 10px 0 0 0;">
+        Add family vacations and trips to block off weeks when camps aren't needed.
+    </p>
+    <a href="{{ url_for('family.trip_new') }}" class="btn btn-primary" style="margin-top: 15px;">+ Add Trip</a>
+</div>
+{% endif %}
+{% endblock %}

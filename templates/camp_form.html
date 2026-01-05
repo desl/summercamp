@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}{% if camp %}{{ camp.name }}{% else %}Add Camp{% endif %} - Summer Camp Tool{% endblock %}
+
+{% block content %}
+<h1>{% if camp %}Edit Camp{% else %}Add Camp{% endif %}</h1>
+
+<p style="color: #6c757d; margin-bottom: 30px;">
+    {% if camp %}
+    Update {{ camp.name }}'s information and manage its sessions.
+    {% else %}
+    Add a camp organization. After creating the camp, you can add specific sessions (different weeks, age groups, activities).
+    {% endif %}
+</p>
+
+<!-- Camp Form -->
+<form method="POST" action="{% if camp %}{{ url_for('camps.camp_update', id=camp.id) }}{% else %}{{ url_for('camps.camp_new') }}{% endif %}">
+    <div class="form-group">
+        <label for="name">Camp Name *</label>
+        <input type="text" id="name" name="name" value="{% if camp %}{{ camp.name }}{% endif %}" required placeholder="e.g., YMCA Summer Camp">
+    </div>
+
+    <div class="form-group">
+        <label for="website">Website</label>
+        <input type="url" id="website" name="website" value="{% if camp %}{{ camp.website }}{% endif %}" placeholder="https://example.com">
+    </div>
+
+    <div class="form-group">
+        <label for="phone">Phone</label>
+        <input type="tel" id="phone" name="phone" value="{% if camp %}{{ camp.phone }}{% endif %}" placeholder="(555) 123-4567">
+    </div>
+
+    <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" value="{% if camp %}{{ camp.email }}{% endif %}" placeholder="info@camp.com">
+    </div>
+
+    <div style="margin-top: 30px; display: flex; gap: 10px;">
+        <button type="submit" class="btn btn-primary">
+            {% if camp %}Update Camp{% else %}Add Camp{% endif %}
+        </button>
+        <a href="{{ url_for('camps.camps_list') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>
+
+<!-- Sessions section (only shown when editing) -->
+{% if camp and sessions is defined %}
+<hr style="margin: 40px 0; border: none; border-top: 2px solid #e9ecef;">
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h2 style="margin: 0;">Sessions for {{ camp.name }}</h2>
+    <a href="{{ url_for('camps.session_new', camp_id=camp.id) }}" class="btn btn-success">+ Add Session</a>
+</div>
+
+<p style="color: #6c757d; margin-bottom: 20px;">
+    Sessions are specific offerings (e.g., "Week 1 - LEGO Robotics" or "2-Week Art Intensive"). These are what you'll book for your kids.
+</p>
+
+{% if sessions %}
+<table>
+    <thead>
+        <tr>
+            <th>Session Name</th>
+            <th>Ages/Grades</th>
+            <th>Duration</th>
+            <th>Times</th>
+            <th>Cost</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for session in sessions %}
+        <tr>
+            <td>
+                <strong>{{ session.name }}</strong>
+                {% if session.url %}
+                <br><a href="{{ session.url }}" target="_blank" style="font-size: 11px; color: #4285f4;">View Details</a>
+                {% endif %}
+            </td>
+            <td style="font-size: 13px;">
+                {% if session.age_min or session.age_max %}
+                    Ages: {% if session.age_min %}{{ session.age_min }}{% else %}?{% endif %}-{% if session.age_max %}{{ session.age_max }}{% else %}?{% endif %}<br>
+                {% endif %}
+                {% if session.grade_min is not none or session.grade_max is not none %}
+                    Grades: {% if session.grade_min is not none %}{{ session.grade_min }}{% else %}?{% endif %}-{% if session.grade_max is not none %}{{ session.grade_max }}{% else %}?{% endif %}
+                {% endif %}
+                {% if not session.age_min and not session.age_max and session.grade_min is none and session.grade_max is none %}
+                    <span style="color: #6c757d;">Not specified</span>
+                {% endif %}
+            </td>
+            <td>
+                {{ session.duration_weeks }} week{% if session.duration_weeks != 1 %}s{% endif %}
+            </td>
+            <td style="font-size: 13px;">
+                {% if session.start_time and session.end_time %}
+                {{ session.start_time }} - {{ session.end_time }}
+                {% else %}
+                <span style="color: #6c757d;">Not set</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if session.cost %}
+                ${{ "%.2f"|format(session.cost) }}
+                {% else %}
+                <span style="color: #6c757d;">-</span>
+                {% endif %}
+            </td>
+            <td class="actions">
+                <a href="{{ url_for('camps.session_view', id=session.id) }}" class="btn btn-secondary">Edit</a>
+                <form method="POST" action="{{ url_for('camps.session_delete', id=session.id) }}" style="display: inline;"
+                      onsubmit="return confirm('Delete {{ session.name }}? This cannot be undone.');">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 20px; border-radius: 4px; text-align: center;">
+    <p style="margin: 0; color: #6c757d;">
+        No sessions added yet. Add your first session for this camp.
+    </p>
+    <a href="{{ url_for('camps.session_new', camp_id=camp.id) }}" class="btn btn-success" style="margin-top: 10px;">+ Add Session</a>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

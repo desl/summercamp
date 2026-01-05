@@ -9,6 +9,8 @@ from flask import Flask, render_template
 from config import Config
 from session_datastore import DatastoreSessionInterface
 from auth import auth_bp, login_required, get_current_user
+from family import family_bp
+from camps import camps_bp
 import os
 
 # Disable HTTPS requirement for OAuth flow in development
@@ -31,6 +33,14 @@ app.session_interface = DatastoreSessionInterface(app.config['GCP_PROJECT_ID'])
 # Register authentication blueprint
 # This adds all the auth routes (/auth/login, /auth/callback, /auth/logout)
 app.register_blueprint(auth_bp)
+
+# Register family management blueprint
+# This adds routes for managing parents, kids, and trips (/family/*)
+app.register_blueprint(family_bp)
+
+# Register camps management blueprint
+# This adds routes for managing camps and sessions (/camps/*)
+app.register_blueprint(camps_bp)
 
 
 @app.route('/')

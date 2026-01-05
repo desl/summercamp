@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Kids - Summer Camp Tool{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Kids</h1>
+    <a href="{{ url_for('family.kid_new') }}" class="btn btn-primary">+ Add Kid</a>
+</div>
+
+<p style="color: #6c757d; margin-bottom: 30px;">
+    Manage your children's information and school dates. School dates are used to calculate summer weeks.
+</p>
+
+{% if kids %}
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Grade</th>
+            <th>Birthday</th>
+            <th>Last Day of School</th>
+            <th>First Day of School</th>
+            <th>Friends</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for kid in kids %}
+        <tr>
+            <td><strong>{{ kid.name }}</strong></td>
+            <td>Grade {{ kid.grade }}</td>
+            <td>{{ kid.birthday }}</td>
+            <td>{{ kid.last_day_of_school }}</td>
+            <td>{{ kid.first_day_of_school }}</td>
+            <td>
+                {% if kid.friends %}
+                    {{ kid.friends|join(', ') }}
+                {% else %}
+                    <span style="color: #6c757d;">None</span>
+                {% endif %}
+            </td>
+            <td class="actions">
+                <a href="{{ url_for('family.kid_view', id=kid.id) }}" class="btn btn-secondary">Edit</a>
+                <form method="POST" action="{{ url_for('family.kid_delete', id=kid.id) }}" style="display: inline;"
+                      onsubmit="return confirm('Delete {{ kid.name }}? This cannot be undone.');">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div style="background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 20px; border-radius: 4px; text-align: center;">
+    <p style="margin: 0; font-size: 16px;">
+        <strong>No kids added yet.</strong>
+    </p>
+    <p style="margin: 10px 0 0 0; color: #856404;">
+        Add your first kid to start planning summer camps. School dates are needed to calculate summer weeks.
+    </p>
+    <a href="{{ url_for('family.kid_new') }}" class="btn btn-primary" style="margin-top: 15px;">+ Add Your First Kid</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}{% if trip %}Edit Trip{% else %}Add Trip{% endif %} - Summer Camp Tool{% endblock %}
+
+{% block content %}
+<h1>{% if trip %}Edit Trip{% else %}Add Trip{% endif %}</h1>
+
+<p style="color: #6c757d; margin-bottom: 30px;">
+    {% if trip %}
+    Update {{ trip.name }} dates.
+    {% else %}
+    Add a family trip or vacation. Trips block off weeks when you don't need camp coverage (Phase 2 feature).
+    {% endif %}
+</p>
+
+<form method="POST" action="{% if trip %}{{ url_for('family.trip_update', id=trip.id) }}{% else %}{{ url_for('family.trip_new') }}{% endif %}">
+    <div class="form-group">
+        <label for="name">Trip Name *</label>
+        <input type="text" id="name" name="name" value="{% if trip %}{{ trip.name }}{% endif %}" required placeholder="e.g., Beach Vacation, Visit Grandparents">
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div class="form-group">
+            <label for="start_date">Start Date *</label>
+            <input type="date" id="start_date" name="start_date" value="{% if trip %}{{ trip.start_date }}{% endif %}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="end_date">End Date *</label>
+            <input type="date" id="end_date" name="end_date" value="{% if trip %}{{ trip.end_date }}{% endif %}" required>
+        </div>
+    </div>
+
+    <div style="background-color: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; border-radius: 4px; margin: 20px 0;">
+        <p style="color: #0c5460; margin: 0; font-size: 14px;">
+            <strong>Coming in Phase 2:</strong> When you add or update a trip, the system will automatically
+            mark overlapping summer weeks as "blocked" so you won't accidentally book camps during your vacation.
+        </p>
+    </div>
+
+    <div style="margin-top: 30px; display: flex; gap: 10px;">
+        <button type="submit" class="btn btn-primary">
+            {% if trip %}Update Trip{% else %}Add Trip{% endif %}
+        </button>
+        <a href="{{ url_for('family.trips_list') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>
+{% endblock %}

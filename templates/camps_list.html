@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Camps - Summer Camp Tool{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Camps</h1>
+    <a href="{{ url_for('camps.camp_new') }}" class="btn btn-primary">+ Add Camp</a>
+</div>
+
+<p style="color: #6c757d; margin-bottom: 30px;">
+    Manage camp organizations and their sessions. Each camp can have multiple sessions (different weeks, age groups, activities).
+</p>
+
+{% if camps %}
+<table>
+    <thead>
+        <tr>
+            <th>Camp Name</th>
+            <th>Contact</th>
+            <th>Sessions</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for camp in camps %}
+        <tr>
+            <td>
+                <strong>{{ camp.name }}</strong>
+                {% if camp.website %}
+                <br><a href="{{ camp.website }}" target="_blank" style="font-size: 12px; color: #4285f4;">{{ camp.website }}</a>
+                {% endif %}
+            </td>
+            <td style="font-size: 13px;">
+                {% if camp.phone %}
+                Phone: {{ camp.phone }}<br>
+                {% endif %}
+                {% if camp.email %}
+                Email: {{ camp.email }}
+                {% endif %}
+                {% if not camp.phone and not camp.email %}
+                <span style="color: #6c757d;">No contact info</span>
+                {% endif %}
+            </td>
+            <td>
+                <span style="background-color: #e9ecef; padding: 4px 10px; border-radius: 12px; font-size: 13px;">
+                    {{ camp.session_count }} session{% if camp.session_count != 1 %}s{% endif %}
+                </span>
+            </td>
+            <td class="actions">
+                <a href="{{ url_for('camps.camp_view', id=camp.id) }}" class="btn btn-secondary">View/Edit</a>
+                <form method="POST" action="{{ url_for('camps.camp_delete', id=camp.id) }}" style="display: inline;"
+                      onsubmit="return confirm('Delete {{ camp.name }}? This cannot be undone.');">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div style="background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 20px; border-radius: 4px; text-align: center;">
+    <p style="margin: 0; font-size: 16px;">
+        <strong>No camps added yet.</strong>
+    </p>
+    <p style="margin: 10px 0 0 0; color: #856404;">
+        Add camp organizations (like "YMCA", "Art Center", etc.) and then add their specific sessions.
+    </p>
+    <a href="{{ url_for('camps.camp_new') }}" class="btn btn-primary" style="margin-top: 15px;">+ Add Your First Camp</a>
+</div>
+{% endif %}
+{% endblock %}

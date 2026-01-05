@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}{% if parent %}Edit Parent{% else %}Add Parent{% endif %} - Summer Camp Tool{% endblock %}
+
+{% block content %}
+<h1>{% if parent %}Edit Parent{% else %}Add Parent{% endif %}</h1>
+
+<p style="color: #6c757d; margin-bottom: 30px;">
+    {% if parent %}
+    Update {{ parent.name }}'s information.
+    {% else %}
+    Add a parent's information. Google Calendar ID is optional and used for calendar integration (Phase 3).
+    {% endif %}
+</p>
+
+<form method="POST" action="{% if parent %}{{ url_for('family.parent_update', id=parent.id) }}{% else %}{{ url_for('family.parent_new') }}{% endif %}">
+    <div class="form-group">
+        <label for="name">Name *</label>
+        <input type="text" id="name" name="name" value="{% if parent %}{{ parent.name }}{% endif %}" required>
+    </div>
+
+    <div class="form-group">
+        <label for="email">Email *</label>
+        <input type="email" id="email" name="email" value="{% if parent %}{{ parent.email }}{% endif %}" required>
+    </div>
+
+    <div class="form-group">
+        <label for="google_calendar_id">Google Calendar ID</label>
+        <input type="text" id="google_calendar_id" name="google_calendar_id" value="{% if parent %}{{ parent.google_calendar_id }}{% endif %}" placeholder="primary or calendar-id@group.calendar.google.com">
+        <small>
+            Used for adding booked camps to Google Calendar (Phase 3 feature).
+            Use "primary" for the default calendar, or find the Calendar ID in Google Calendar settings.
+        </small>
+    </div>
+
+    <div style="margin-top: 30px; display: flex; gap: 10px;">
+        <button type="submit" class="btn btn-primary">
+            {% if parent %}Update Parent{% else %}Add Parent{% endif %}
+        </button>
+        <a href="{{ url_for('family.parents_list') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>
+{% endblock %}
