@@ -27,7 +27,8 @@ from datastore_helpers import (
     entity_to_dict,
     entities_to_dict_list
 )
-from datetime import datetime
+from datetime import datetime, timedelta
+import re
 
 # Create the blueprint
 camps_bp = Blueprint('camps', __name__, url_prefix='/camps')
@@ -294,12 +295,83 @@ def session_new(camp_id):
         flash(f"Session '{request.form['name']}' created successfully!", 'success')
         return redirect(url_for('camps.camp_view', id=camp_id))
 
-    # GET request - show the form
+    # GET request - show the form with smart defaults
+    # Query existing sessions for this camp to determine smart defaults
+    existing_sessions = query_by_user(
+        client,
+        'Session',
+        user['email'],
+        filters=[('camp_id', '=', camp_id)],
+        order_by='-created_at'
+    )
+
+    # Calculate smart defaults based on most recent session
+    defaults = {}
+    if existing_sessions:
+        prev_session = entity_to_dict(existing_sessions[0])
+
+        # 1. Auto-increment session name if it ends with a number
+        prev_name = prev_session.get('name', '')
+        match = re.search(r'^(.+?)(\d+)$', prev_name)
+        if match:
+            name_base = match.group(1)
+            number = int(match.group(2))
+            defaults['name'] = f"{name_base}{number + 1}"
+        else:
+            defaults['name'] = prev_name
+
+        # 2. Calculate start date as Monday after previous session's end date
+        if prev_session.get('session_end_date'):
+            prev_end = prev_session['session_end_date']
+            # Find the next Monday after the previous session's end date
+            days_until_monday = (7 - prev_end.weekday()) % 7
+            if days_until_monday == 0:
+                days_until_monday = 7
+            defaults['session_start_date'] = prev_end + timedelta(days=days_until_monday)
+
+        # 3. Copy duration_weeks (default to 1 if not set)
+        defaults['duration_weeks'] = prev_session.get('duration_weeks', 1)
+
+        # 4. Calculate end date based on start date + duration
+        if defaults.get('session_start_date') and defaults.get('duration_weeks'):
+            start_date = defaults['session_start_date']
+            duration_weeks = defaults['duration_weeks']
+            # End date is the Friday of the last week
+            # For 1 week: Friday of the same week (4 days after Monday)
+            # For 2 weeks: Friday of second week (11 days after Monday)
+            days_to_add = (duration_weeks * 7) - 3  # -3 because Monday to Friday is 4 days
+            defaults['session_end_date'] = start_date + timedelta(days=days_to_add)
+
+        # 5. Copy cost
+        if prev_session.get('cost') is not None:
+            defaults['cost'] = prev_session['cost']
+
+        # 6. Copy early/late care availability and costs
+        defaults['early_care_available'] = prev_session.get('early_care_available', False)
+        if prev_session.get('early_care_cost') is not None:
+            defaults['early_care_cost'] = prev_session['early_care_cost']
+
+        defaults['late_care_available'] = prev_session.get('late_care_available', False)
+        if prev_session.get('late_care_cost') is not None:
+            defaults['late_care_cost'] = prev_session['late_care_cost']
+
+        # Also copy other useful fields
+        defaults['start_time'] = prev_session.get('start_time', '')
+        defaults['end_time'] = prev_session.get('end_time', '')
+        defaults['dropoff_window_start'] = prev_session.get('dropoff_window_start', '')
+        defaults['dropoff_window_end'] = prev_session.get('dropoff_window_end', '')
+        defaults['pickup_window_start'] = prev_session.get('pickup_window_start', '')
+        defaults['pickup_window_end'] = prev_session.get('pickup_window_end', '')
+    else:
+        # No previous sessions - use basic defaults
+        defaults['duration_weeks'] = 1
+
     return render_template(
         'session_form.html',
         user=user,
         camp=entity_to_dict(camp),
-        session=None
+        session=None,
+        defaults=defaults
     )
 
 
@@ -332,7 +404,8 @@ def session_view(id):
         'session_form.html',
         user=user,
         camp=entity_to_dict(camp),
-        session=entity_to_dict(session_entity)
+        session=entity_to_dict(session_entity),
+        defaults={}
     )
 
 
