@@ -33,17 +33,10 @@
         z-index: 10;
     }
 
+    /* Vertical layout (weeks as rows) */
     .schedule-table th.week-header {
         text-align: left;
         min-width: 120px;
-    }
-
-    .schedule-table td {
-        border: 1px solid #dee2e6;
-        padding: 8px;
-        vertical-align: top;
-        min-width: 150px;
-        height: 100px;
     }
 
     .schedule-table td.week-info {
@@ -52,6 +45,28 @@
         position: sticky;
         left: 0;
         z-index: 5;
+    }
+
+    /* Horizontal layout (kids as rows) */
+    .schedule-table th.kid-header {
+        text-align: left;
+        min-width: 150px;
+    }
+
+    .schedule-table td.kid-name {
+        font-weight: 600;
+        background-color: #f8f9fa;
+        position: sticky;
+        left: 0;
+        z-index: 5;
+    }
+
+    .schedule-table td {
+        border: 1px solid #dee2e6;
+        padding: 8px;
+        vertical-align: top;
+        min-width: 150px;
+        height: 100px;
     }
 
     .week-cell {
@@ -169,6 +184,11 @@
 <div class="schedule-actions">
     <h1 style="margin: 0;">Summer Schedule</h1>
     <div style="display: flex; gap: 10px;">
+        <form method="POST" action="{{ url_for('schedule.toggle_view') }}" style="display: inline;">
+            <button type="submit" class="btn btn-primary">
+                {% if view_mode == 'horizontal' %}↕️ Switch to Vertical{% else %}↔️ Switch to Horizontal{% endif %}
+            </button>
+        </form>
         <a href="{{ url_for('schedule.booking_new') }}" class="btn btn-success">+ Add Booking</a>
         <form method="POST" action="{{ url_for('schedule.weeks_recalculate') }}" style="display: inline;">
             <button type="submit" class="btn btn-secondary">Recalculate Weeks</button>
@@ -205,6 +225,72 @@
 <!-- Schedule Grid -->
 <div class="schedule-grid">
     <table class="schedule-table">
+        {% if view_mode == 'horizontal' %}
+        <!-- Horizontal Layout: Kids as rows, Weeks as columns -->
+        <thead>
+            <tr>
+                <th class="kid-header">Kid</th>
+                {% for week in weeks %}
+                <th>
+                    Week {{ week.week_number }}<br>
+                    <span style="font-size: 11px; font-weight: normal;">
+                        {{ week.start_date|format_date_short }} - {{ week.end_date|format_date_short }}
+                    </span>
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for kid in kids %}
+            <tr>
+                <td class="kid-name">{{ kid.name }}</td>
+                {% for week in weeks %}
+                <td class="week-cell {% if week.is_blocked %}blocked{% endif %}">
+                    {% if week.is_blocked %}
+                        <div class="blocked-indicator">🚫 Trip Blocked</div>
+                    {% else %}
+                        {% set cell_key = (kid.id, week.id) %}
+                        {% set cell_bookings = bookings_lookup.get(cell_key, []) %}
+
+                        {% if cell_bookings %}
+                            {% for booking in cell_bookings %}
+                            <div class="booking {{ booking.state }}">
+                                <div class="booking-camp">{{ booking.camp_name }}</div>
+                                <div class="booking-session">
+                                    {{ booking.session_name }}
+                                    {% if booking.total_weeks and booking.total_weeks > 1 %}
+                                    <span style="font-size: 10px; opacity: 0.8;"> (week {{ booking.week_of_session }} of {{ booking.total_weeks }})</span>
+                                    {% endif %}
+                                </div>
+                                <div class="booking-actions">
+                                    <a href="{{ url_for('schedule.booking_view', id=booking.id) }}" style="text-decoration: none; color: inherit;">
+                                        <button type="button">Edit</button>
+                                    </a>
+                                    {% if booking.state != 'booked' %}
+                                    <form method="POST" action="{{ url_for('schedule.booking_change_state', id=booking.id) }}" style="display: inline;">
+                                        {% if booking.state == 'idea' %}
+                                        <input type="hidden" name="state" value="preferred">
+                                        <button type="submit">→ Pref</button>
+                                        {% elif booking.state == 'preferred' %}
+                                        <input type="hidden" name="state" value="booked">
+                                        <button type="submit">→ Book</button>
+                                        {% endif %}
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <a href="{{ url_for('schedule.booking_new') }}?kid_id={{ kid.id }}&week_id={{ week.id }}" class="add-booking-btn">+ Add</a>
+                        {% endif %}
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+        {% else %}
+        <!-- Vertical Layout: Weeks as rows, Kids as columns -->
         <thead>
             <tr>
                 <th class="week-header">Week</th>
@@ -270,6 +356,7 @@
             </tr>
             {% endfor %}
         </tbody>
+        {% endif %}
     </table>
 </div>
 

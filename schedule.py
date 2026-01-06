@@ -16,7 +16,7 @@ This is the core workflow module where planning happens. Weeks, bookings, and
 the main schedule view are all about "when" things happen.
 """
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app, jsonify, make_response
 from auth import login_required, get_current_user
 from datastore_helpers import (
     get_datastore_client,
@@ -829,6 +829,9 @@ def schedule_view():
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
 
+    # Get view preference from cookie (default to horizontal)
+    view_mode = request.cookies.get('schedule_view', 'horizontal')
+
     # Get all kids, weeks, and bookings
     kids = query_by_user(client, 'Kid', user['email'], order_by='name')
     weeks = query_by_user(client, 'Week', user['email'], order_by='week_number')
@@ -859,5 +862,24 @@ def schedule_view():
         user=user,
         kids=entities_to_dict_list(kids),
         weeks=entities_to_dict_list(weeks),
-        bookings_lookup=bookings_lookup
+        bookings_lookup=bookings_lookup,
+        view_mode=view_mode
     )
+
+
+@schedule_bp.route('/toggle-view', methods=['POST'])
+@login_required
+def toggle_view():
+    """
+    Toggle schedule view between horizontal and vertical layouts.
+
+    Saves preference in a cookie for future visits.
+    """
+    current_view = request.cookies.get('schedule_view', 'horizontal')
+    new_view = 'vertical' if current_view == 'horizontal' else 'horizontal'
+
+    response = make_response(redirect(url_for('schedule.schedule_view')))
+    # Set cookie to expire in 1 year
+    response.set_cookie('schedule_view', new_view, max_age=365*24*60*60)
+
+    return response
