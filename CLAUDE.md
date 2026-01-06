@@ -14,6 +14,17 @@ This is a Summer Camp Organization Tool - a Python/Flask web application to help
 - Serverless architecture preferred for small user base (1-2 users initially)
 - Secrets should always be kept out of source code, even for quick things. The repo will be publicly available.
 
+## GitHub Issue Management
+
+**IMPORTANT:** Do NOT close GitHub issues without explicit user confirmation.
+
+- When addressing an issue, implement the solution and deploy it
+- Comment on the issue with what was implemented, but leave it OPEN
+- Wait for the issue reporter to test the solution and confirm it works
+- Only the issue reporter should close issues once they verify the fix
+
+This ensures solutions are properly tested in the production environment before being marked as complete.
+
 ## Architecture
 
 **Technology Stack:**

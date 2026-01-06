@@ -323,6 +323,9 @@ def session_new(camp_id):
         # 2. Calculate start date as Monday after previous session's end date
         if prev_session.get('session_end_date'):
             prev_end = prev_session['session_end_date']
+            # Convert to datetime if it's a string
+            if isinstance(prev_end, str):
+                prev_end = datetime.strptime(prev_end, '%Y-%m-%d')
             # Find the next Monday after the previous session's end date
             days_until_monday = (7 - prev_end.weekday()) % 7
             if days_until_monday == 0:
