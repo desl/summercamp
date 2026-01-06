@@ -53,17 +53,19 @@ app.register_blueprint(schedule_bp)
 @app.template_filter('format_date_short')
 def format_date_short(date_value):
     """
-    Format a date as MM/DD instead of YYYY-MM-DD.
+    Format a date as M/D instead of YYYY-MM-DD (no leading zeros).
 
     Used in schedule and week views for a cleaner, more compact display.
+    Example: June 5 becomes "6/5", not "06/05"
     """
     if isinstance(date_value, datetime):
-        return date_value.strftime('%m/%d')
+        # Use %-m and %-d on Unix to strip leading zeros
+        return date_value.strftime('%-m/%-d')
     elif isinstance(date_value, str):
         # Handle string dates (YYYY-MM-DD format)
         try:
             dt = datetime.strptime(date_value, '%Y-%m-%d')
-            return dt.strftime('%m/%d')
+            return dt.strftime('%-m/%-d')
         except ValueError:
             return date_value
     return str(date_value)
