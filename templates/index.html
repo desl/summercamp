@@ -9,7 +9,7 @@
 </p>
 
 <div style="background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 4px; margin-bottom: 30px;">
-    <strong>Phase 1 Complete!</strong> You can now manage kids, camps, parents, and trips.
+    <strong>All Core Features Complete!</strong> The Summer Camp Organization Tool is ready to use. Plan your summer, manage bookings, and sync with Google Calendar.
 </div>
 
 <!-- Quick Actions Grid -->
@@ -50,23 +50,60 @@
         </p>
         <a href="{{ url_for('family.parents_list') }}" class="btn btn-primary">Manage Parents</a>
     </div>
+
+    <!-- Schedule Card -->
+    <div style="background-color: white; border: 2px solid #4285f4; border-radius: 6px; padding: 20px;">
+        <h3 style="margin-top: 0; color: #4285f4;">📅 Schedule</h3>
+        <p style="color: #6c757d; font-size: 14px; margin-bottom: 15px;">
+            Plan your summer with the booking grid
+        </p>
+        <a href="{{ url_for('schedule.schedule_view') }}" class="btn btn-success">View Schedule</a>
+    </div>
 </div>
 
 <!-- Features Section -->
 <div style="background-color: #f8f9fa; border-radius: 6px; padding: 25px;">
     <h2 style="margin-top: 0; color: #495057;">Features</h2>
-    <ul style="margin: 15px 0;">
-        <li style="margin: 10px 0; color: #28a745; font-weight: 500;">✓ Google OAuth authentication</li>
-        <li style="margin: 10px 0; color: #28a745; font-weight: 500;">✓ Manage kids and school dates</li>
-        <li style="margin: 10px 0; color: #28a745; font-weight: 500;">✓ Manage camps and sessions</li>
-        <li style="margin: 10px 0; color: #28a745; font-weight: 500;">✓ Track family trips</li>
-        <li style="margin: 10px 0; color: #6c757d;">Coming in Phase 2: Week calculation and booking workflow</li>
-        <li style="margin: 10px 0; color: #6c757d;">Coming in Phase 2: Schedule grid view</li>
-        <li style="margin: 10px 0; color: #6c757d;">Coming in Phase 3: Google Calendar integration</li>
-        <li style="margin: 10px 0; color: #6c757d;">Coming in Phase 3: Registration deadline tracking</li>
-    </ul>
-    <p style="margin-top: 20px; color: #6c757d; font-size: 14px;">
-        <strong>Next Steps:</strong> Add your kids and their school dates, then add camps and sessions to start planning!
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px 30px; margin: 15px 0;">
+        <div>
+            <h3 style="font-size: 16px; margin: 15px 0 10px 0; color: #495057;">Family Management</h3>
+            <ul style="margin: 0; padding-left: 20px;">
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Google OAuth authentication</li>
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Manage kids and school dates</li>
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Track family trips</li>
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Parent contact information</li>
+            </ul>
+        </div>
+        <div>
+            <h3 style="font-size: 16px; margin: 15px 0 10px 0; color: #495057;">Camp Planning</h3>
+            <ul style="margin: 0; padding-left: 20px;">
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Manage camps and sessions</li>
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Multi-week session support</li>
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Session date validation</li>
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Cost tracking (including early/late care)</li>
+            </ul>
+        </div>
+        <div>
+            <h3 style="font-size: 16px; margin: 15px 0 10px 0; color: #495057;">Scheduling</h3>
+            <ul style="margin: 0; padding-left: 20px;">
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Automatic week calculation</li>
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Schedule grid view (kids × weeks)</li>
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Trip blocking</li>
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Booking workflow (idea → preferred → booked)</li>
+            </ul>
+        </div>
+        <div>
+            <h3 style="font-size: 16px; margin: 15px 0 10px 0; color: #495057;">Smart Features</h3>
+            <ul style="margin: 0; padding-left: 20px;">
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Collision detection</li>
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Conflict warnings</li>
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Google Calendar sync</li>
+                <li style="margin: 8px 0; color: #28a745; font-weight: 500;">✓ Registration deadline tracking</li>
+            </ul>
+        </div>
+    </div>
+    <p style="margin-top: 25px; color: #6c757d; font-size: 14px;">
+        <strong>Quick Start:</strong> Add your kids with school dates → Add camps and sessions → Visit the Schedule to start planning your summer!
     </p>
 </div>
 {% endblock %}

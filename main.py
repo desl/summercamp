@@ -12,6 +12,7 @@ from auth import auth_bp, login_required, get_current_user
 from family import family_bp
 from camps import camps_bp
 from schedule import schedule_bp
+from datetime import datetime
 import os
 
 # Disable HTTPS requirement for OAuth flow in development
@@ -46,6 +47,26 @@ app.register_blueprint(camps_bp)
 # Register schedule blueprint
 # This adds routes for managing weeks and bookings (/schedule/*)
 app.register_blueprint(schedule_bp)
+
+
+# Add custom Jinja2 template filter for formatting dates
+@app.template_filter('format_date_short')
+def format_date_short(date_value):
+    """
+    Format a date as MM/DD instead of YYYY-MM-DD.
+
+    Used in schedule and week views for a cleaner, more compact display.
+    """
+    if isinstance(date_value, datetime):
+        return date_value.strftime('%m/%d')
+    elif isinstance(date_value, str):
+        # Handle string dates (YYYY-MM-DD format)
+        try:
+            dt = datetime.strptime(date_value, '%Y-%m-%d')
+            return dt.strftime('%m/%d')
+        except ValueError:
+            return date_value
+    return str(date_value)
 
 
 @app.route('/')

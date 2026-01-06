@@ -29,8 +29,8 @@
         {% for week in weeks %}
         <tr>
             <td><strong>Week {{ week.week_number }}</strong></td>
-            <td>{{ week.start_date }}</td>
-            <td>{{ week.end_date }}</td>
+            <td>{{ week.start_date|format_date_short }}</td>
+            <td>{{ week.end_date|format_date_short }}</td>
             <td>
                 {% if week.is_blocked %}
                 <span style="background-color: #f8d7da; color: #721c24; padding: 4px 10px; border-radius: 12px; font-size: 13px;">
