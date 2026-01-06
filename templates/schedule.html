@@ -33,20 +33,20 @@
         z-index: 10;
     }
 
-    .schedule-table th.kid-header {
+    .schedule-table th.week-header {
         text-align: left;
-        min-width: 150px;
+        min-width: 120px;
     }
 
     .schedule-table td {
         border: 1px solid #dee2e6;
         padding: 8px;
         vertical-align: top;
-        min-width: 120px;
+        min-width: 150px;
         height: 100px;
     }
 
-    .schedule-table td.kid-name {
+    .schedule-table td.week-info {
         font-weight: 600;
         background-color: #f8f9fa;
         position: sticky;
@@ -207,22 +207,25 @@
     <table class="schedule-table">
         <thead>
             <tr>
-                <th class="kid-header">Kid</th>
-                {% for week in weeks %}
-                <th>
-                    Week {{ week.week_number }}<br>
-                    <span style="font-size: 11px; font-weight: normal;">
-                        {{ week.start_date|format_date_short }} - {{ week.end_date|format_date_short }}
-                    </span>
-                </th>
+                <th class="week-header">Week</th>
+                {% for kid in kids %}
+                <th>{{ kid.name }}</th>
                 {% endfor %}
             </tr>
         </thead>
         <tbody>
-            {% for kid in kids %}
+            {% for week in weeks %}
             <tr>
-                <td class="kid-name">{{ kid.name }}</td>
-                {% for week in weeks %}
+                <td class="week-info">
+                    <strong>Week {{ week.week_number }}</strong><br>
+                    <span style="font-size: 11px; font-weight: normal;">
+                        {{ week.start_date|format_date_short }} - {{ week.end_date|format_date_short }}
+                    </span>
+                    {% if week.is_blocked %}
+                    <br><span style="font-size: 11px; color: #721c24;">🚫 Trip</span>
+                    {% endif %}
+                </td>
+                {% for kid in kids %}
                 <td class="week-cell {% if week.is_blocked %}blocked{% endif %}">
                     {% if week.is_blocked %}
                         <div class="blocked-indicator">🚫 Trip Blocked</div>
