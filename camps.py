@@ -27,8 +27,11 @@ from datastore_helpers import (
     entity_to_dict,
     entities_to_dict_list
 )
+from calendar_integration import delete_booking_event
 from datetime import datetime, timedelta
 import re
+import json
+from ai_parser import parse_session_url
 
 # Create the blueprint
 camps_bp = Blueprint('camps', __name__, url_prefix='/camps')
@@ -302,10 +305,10 @@ def session_new(camp_id):
         'Session',
         user['email'],
         filters=[('camp_id', '=', camp_id)],
-        order_by='-created_at'
+        order_by='-updated_at'
     )
 
-    # Calculate smart defaults based on most recent session
+    # Calculate smart defaults based on most recently modified session
     defaults = {}
     if existing_sessions:
         prev_session = entity_to_dict(existing_sessions[0])
@@ -357,6 +360,16 @@ def session_new(camp_id):
         defaults['late_care_available'] = prev_session.get('late_care_available', False)
         if prev_session.get('late_care_cost') is not None:
             defaults['late_care_cost'] = prev_session['late_care_cost']
+
+        # 7. Copy age and grade eligibility
+        if prev_session.get('age_min') is not None:
+            defaults['age_min'] = prev_session['age_min']
+        if prev_session.get('age_max') is not None:
+            defaults['age_max'] = prev_session['age_max']
+        if prev_session.get('grade_min') is not None:
+            defaults['grade_min'] = prev_session['grade_min']
+        if prev_session.get('grade_max') is not None:
+            defaults['grade_max'] = prev_session['grade_max']
 
         # Also copy other useful fields
         defaults['start_time'] = prev_session.get('start_time', '')
@@ -494,7 +507,8 @@ def session_delete(id):
 
     Why: Remove sessions that are no longer offered.
 
-    Note: This should warn if bookings exist (Phase 2 enhancement).
+    This will also delete all associated bookings and calendar events.
+    Requires confirmation if bookings exist.
     """
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
@@ -508,7 +522,245 @@ def session_delete(id):
 
     camp_id = session_entity['camp_id']
     name = session_entity['name']
+
+    # Check for bookings associated with this session
+    bookings = query_by_user(
+        client,
+        'Booking',
+        user['email'],
+        filters=[('session_id', '=', id)]
+    )
+
+    # If bookings exist and user hasn't confirmed, require confirmation
+    confirmed = request.args.get('confirm') == '1' or request.form.get('confirm') == '1'
+
+    if bookings and not confirmed:
+        booking_count = len(bookings)
+        booked_count = sum(1 for b in bookings if b.get('state') == 'booked')
+
+        if booked_count > 0:
+            flash(
+                f"Warning: This session has {booking_count} booking(s), including {booked_count} confirmed booking(s). "
+                f"Deleting this session will also delete all associated bookings and calendar events. "
+                f"Please confirm you want to proceed.",
+                'warning'
+            )
+        else:
+            flash(
+                f"Warning: This session has {booking_count} booking(s). "
+                f"Deleting this session will also delete all associated bookings. "
+                f"Please confirm you want to proceed.",
+                'warning'
+            )
+
+        # Redirect back with confirmation parameter
+        return render_template(
+            'confirm_session_delete.html',
+            user=user,
+            session=entity_to_dict(session_entity),
+            camp_id=camp_id,
+            booking_count=booking_count,
+            booked_count=booked_count
+        )
+
+    # Delete all associated bookings and their calendar events
+    bookings_deleted = 0
+    calendar_events_deleted = 0
+
+    for booking in bookings:
+        try:
+            # If booking is 'booked' and has a calendar event, delete it
+            if booking.get('state') == 'booked' and booking.get('calendar_event_id') and 'credentials' in session:
+                try:
+                    success = delete_booking_event(session['credentials'], booking['calendar_event_id'])
+                    if success:
+                        calendar_events_deleted += 1
+                except Exception as e:
+                    print(f"Error deleting calendar event {booking['calendar_event_id']}: {e}")
+
+            delete_entity(client, booking)
+            bookings_deleted += 1
+        except Exception as e:
+            print(f"Error deleting booking {booking.key.name}: {e}")
+
+    # Now delete the session
     delete_entity(client, session_entity)
 
-    flash(f"Session '{name}' deleted successfully.", 'success')
+    # Flash appropriate message
+    if bookings_deleted > 0:
+        if calendar_events_deleted > 0:
+            flash(
+                f"Session '{name}' deleted successfully along with {bookings_deleted} booking(s) "
+                f"and {calendar_events_deleted} calendar event(s).",
+                'success'
+            )
+        else:
+            flash(f"Session '{name}' deleted successfully along with {bookings_deleted} booking(s).", 'success')
+    else:
+        flash(f"Session '{name}' deleted successfully.", 'success')
+
     return redirect(url_for('camps.camp_view', id=camp_id))
+
+
+@camps_bp.route('/parse-url', methods=['POST'])
+@login_required
+def parse_url():
+    """
+    Parse a camp/session URL using AI to extract structured data.
+    
+    This endpoint uses Google Gemini to intelligently extract camp and session
+    information from website URLs, including multi-level link following and
+    stale data detection.
+    
+    Expects JSON body with:
+        - url: The URL to parse
+        
+    Returns:
+        JSON with extracted data and staleness warnings
+    """
+    user = get_current_user()
+    
+    try:
+        # Get URL from request
+        data = request.get_json()
+        url = data.get('url')
+        
+        if not url:
+            return json.dumps({'success': False, 'error': 'URL is required'}), 400
+        
+        # Parse the URL using AI
+        result = parse_session_url(
+            url,
+            current_app.config['GCP_PROJECT_ID'],
+            current_app.config['GCP_REGION'],
+            current_app.config['GEMINI_MODEL']
+        )
+        
+        return json.dumps(result), 200
+        
+    except Exception as e:
+        return json.dumps({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@camps_bp.route('/<camp_id>/sessions/bulk', methods=['POST'])
+@login_required
+def session_bulk_create(camp_id):
+    """
+    Create multiple sessions at once from AI-parsed data.
+    
+    This endpoint accepts a list of session objects and creates them all
+    in a single transaction, useful for adding all sessions from a camp
+    website that lists multiple weeks/sessions.
+    
+    Expects JSON body with:
+        - sessions: List of session objects with all session fields
+        
+    Returns:
+        JSON with success status and count of created sessions
+    """
+    user = get_current_user()
+    client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
+    
+    try:
+        # Verify camp exists and user has access
+        camp = get_entity_for_user(client, 'Camp', camp_id, user['email'])
+        if not camp:
+            return json.dumps({'success': False, 'error': 'Camp not found or access denied'}), 404
+        
+        # Get sessions from request
+        data = request.get_json()
+        sessions = data.get('sessions', [])
+        
+        if not sessions:
+            return json.dumps({'success': False, 'error': 'No sessions provided'}), 400
+        
+        created_count = 0
+        
+        # Create each session
+        for session_data in sessions:
+            # Parse optional integer fields
+            age_min = session_data.get('age_min')
+            age_max = session_data.get('age_max')
+            grade_min = session_data.get('grade_min')
+            grade_max = session_data.get('grade_max')
+            cost = session_data.get('cost')
+            early_care_cost = session_data.get('early_care_cost')
+            late_care_cost = session_data.get('late_care_cost')
+            
+            # Parse registration date
+            registration_open_date = None
+            if session_data.get('registration_open_date'):
+                try:
+                    registration_open_date = datetime.strptime(
+                        session_data['registration_open_date'], 
+                        '%Y-%m-%d'
+                    )
+                except ValueError:
+                    pass
+            
+            # Parse session date range
+            session_start_date = None
+            session_end_date = None
+            if session_data.get('session_start_date'):
+                try:
+                    session_start_date = datetime.strptime(
+                        session_data['session_start_date'], 
+                        '%Y-%m-%d'
+                    )
+                except ValueError:
+                    pass
+            if session_data.get('session_end_date'):
+                try:
+                    session_end_date = datetime.strptime(
+                        session_data['session_end_date'], 
+                        '%Y-%m-%d'
+                    )
+                except ValueError:
+                    pass
+            
+            # Create the session entity
+            create_entity(
+                client,
+                'Session',
+                user['email'],
+                {
+                    'camp_id': camp_id,
+                    'name': session_data.get('name', 'Unnamed Session'),
+                    'age_min': age_min,
+                    'age_max': age_max,
+                    'grade_min': grade_min,
+                    'grade_max': grade_max,
+                    'duration_weeks': session_data.get('duration_weeks', 1),
+                    'session_start_date': session_start_date,
+                    'session_end_date': session_end_date,
+                    'holidays': [],
+                    'start_time': session_data.get('start_time', ''),
+                    'end_time': session_data.get('end_time', ''),
+                    'dropoff_window_start': session_data.get('dropoff_window_start', ''),
+                    'dropoff_window_end': session_data.get('dropoff_window_end', ''),
+                    'pickup_window_start': session_data.get('pickup_window_start', ''),
+                    'pickup_window_end': session_data.get('pickup_window_end', ''),
+                    'url': session_data.get('url', ''),
+                    'cost': cost,
+                    'early_care_available': session_data.get('early_care_available', False),
+                    'early_care_cost': early_care_cost,
+                    'late_care_available': session_data.get('late_care_available', False),
+                    'late_care_cost': late_care_cost,
+                    'registration_open_date': registration_open_date
+                }
+            )
+            created_count += 1
+        
+        return json.dumps({
+            'success': True,
+            'created': created_count
+        }), 200
+        
+    except Exception as e:
+        return json.dumps({
+            'success': False,
+            'error': str(e)
+        }), 500

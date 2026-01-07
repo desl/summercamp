@@ -22,6 +22,7 @@ This is a Summer Camp Organization Tool - a Python/Flask web application to help
 - Comment on the issue with what was implemented, but leave it OPEN
 - Wait for the issue reporter to test the solution and confirm it works
 - Only the issue reporter should close issues once they verify the fix
+- Only issues with the label "bug" should be automatically addressed and have code committed and deployed against them.
 
 This ensures solutions are properly tested in the production environment before being marked as complete.
 

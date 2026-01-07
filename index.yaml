@@ -43,6 +43,14 @@ indexes:
   - name: created_at
     direction: desc
 
+# Index for Sessions by camp ordered by update date (for smart defaults based on most recently modified)
+- kind: Session
+  properties:
+  - name: camp_id
+  - name: user_email
+  - name: updated_at
+    direction: desc
+
 # Index for Weeks (filter by user_email, order by week_number)
 - kind: Week
   properties:

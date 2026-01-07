@@ -54,3 +54,12 @@ class Config:
 
     # GCP Project ID (used for Datastore client)
     GCP_PROJECT_ID = os.environ.get('GOOGLE_CLOUD_PROJECT') or 'summercamp-dev-202601'
+
+    # GCP Region for Vertex AI
+    # Used for Gemini AI model API calls
+    GCP_REGION = os.environ.get('GCP_REGION') or 'us-central1'
+
+    # Gemini model configuration
+    # Gemini 2.5 Flash is optimized for fast, cost-effective structured data extraction
+    # Using latest stable model (Gemini 1.5 Flash variants were retired)
+    GEMINI_MODEL = 'gemini-2.5-flash'
