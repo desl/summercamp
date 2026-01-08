@@ -18,6 +18,73 @@ import vertexai
 from vertexai.generative_models import GenerativeModel, GenerationConfig
 import json
 import re
+import math
+
+
+def calculate_session_durations(extracted_data):
+    """
+    Calculate duration_weeks from session start and end dates.
+
+    Rules:
+    - Camps are 5 days per week (Mon-Fri typically)
+    - If a camp starts Monday and ends Friday, don't count weekends
+    - Round up to integer weeks
+    - Examples: 3 days = 1 week, 6 days = 2 weeks
+
+    Args:
+        extracted_data: Dict with sessions array
+    """
+    sessions = extracted_data.get('sessions', [])
+
+    for session in sessions:
+        start_date_str = session.get('session_start_date')
+        end_date_str = session.get('session_end_date')
+
+        if not start_date_str or not end_date_str:
+            # If no dates, leave duration as-is or default to 1
+            if 'duration_weeks' not in session or session['duration_weeks'] is None:
+                session['duration_weeks'] = 1
+            continue
+
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+
+            # Calculate total days (inclusive)
+            total_days = (end_date - start_date).days + 1
+
+            # Check if it's a Monday-Friday camp (starts Monday, ends Friday)
+            # Monday = 0, Friday = 4
+            starts_monday = start_date.weekday() == 0
+            ends_friday = end_date.weekday() == 4
+
+            if starts_monday and ends_friday and total_days >= 5:
+                # This is a Monday-Friday camp spanning one or more weeks
+                # Don't count weekends
+                # Calculate number of full weeks
+                full_weeks = total_days // 7
+                remaining_days = total_days % 7
+
+                # Each full week has 5 camp days
+                # Remaining days (if any) are weekdays
+                camp_days = full_weeks * 5 + min(remaining_days, 5)
+            else:
+                # For camps that don't follow Mon-Fri pattern, count all days
+                camp_days = total_days
+
+            # Convert camp days to weeks (5 days = 1 week)
+            # Round up: 3 days = 1 week, 6 days = 2 weeks
+            duration_weeks = math.ceil(camp_days / 5)
+
+            session['duration_weeks'] = max(1, duration_weeks)  # At least 1 week
+
+            print(f"Calculated duration for {session.get('name', 'session')}: {total_days} total days -> {camp_days} camp days -> {duration_weeks} weeks")
+
+        except (ValueError, TypeError) as e:
+            # If date parsing fails, default to 1 week
+            print(f"Error calculating duration for session: {e}")
+            if 'duration_weeks' not in session or session['duration_weeks'] is None:
+                session['duration_weeks'] = 1
 
 
 def parse_session_url(url, project_id, region, model_name):
@@ -68,6 +135,9 @@ def parse_session_url(url, project_id, region, model_name):
             region,
             model_name
         )
+
+        # Calculate duration_weeks from dates for each session
+        calculate_session_durations(extracted_data)
 
         # Detect stale data
         staleness_info = detect_stale_data(extracted_data)

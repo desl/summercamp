@@ -114,11 +114,11 @@
                 <span style="color: #6c757d;">-</span>
                 {% endif %}
             </td>
-            <td class="actions">
-                <a href="{{ url_for('camps.session_view', id=session.id) }}" class="btn btn-secondary" style="vertical-align: middle;">Edit</a>
-                <form method="POST" action="{{ url_for('camps.session_delete', id=session.id) }}" style="display: inline; vertical-align: middle;"
+            <td class="actions" style="display: flex; gap: 5px; align-items: center;">
+                <a href="{{ url_for('camps.session_view', id=session.id) }}" class="btn btn-secondary" style="padding: 6px 12px; line-height: 1.5; box-sizing: border-box; display: inline-block;">Edit</a>
+                <form method="POST" action="{{ url_for('camps.session_delete', id=session.id) }}" style="margin: 0; display: inline-block;"
                       onsubmit="return confirm('Delete {{ session.name }}? This cannot be undone.');">
-                    <button type="submit" class="btn btn-danger" style="vertical-align: middle;">Delete</button>
+                    <button type="submit" class="btn btn-danger" style="padding: 6px 12px; line-height: 1.5; box-sizing: border-box; display: inline-block;">Delete</button>
                 </form>
             </td>
         </tr>
