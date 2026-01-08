@@ -41,22 +41,22 @@ def parse_session_url(url, project_id, region, model_name):
         if len(pages) == 0:
             print(f"WARNING: No pages fetched for URL: {url}")
 
-        # Prioritize the main page (depth 0) - send up to 500K of it
-        # Then add additional pages if there's room
+        # Prioritize the main page (depth 0) - send up to 300K of it
+        # Then add additional pages if there's room (max 400K total for faster processing)
         main_page = next((p for p in pages if p['depth'] == 0), None)
         if main_page:
             # Take more content from the main page
-            combined_html = main_page['html'][:500000]
-            print(f"Using main page HTML (up to 500K): {len(combined_html)} characters")
+            combined_html = main_page['html'][:300000]
+            print(f"Using main page HTML (up to 300K): {len(combined_html)} characters")
 
             # Add other pages if we have room
             for page in pages:
-                if page['depth'] > 0 and len(combined_html) < 700000:
-                    remaining_space = 700000 - len(combined_html)
+                if page['depth'] > 0 and len(combined_html) < 400000:
+                    remaining_space = 400000 - len(combined_html)
                     combined_html += "\n\n" + page['html'][:remaining_space]
         else:
             # Fallback to combining all pages
-            combined_html = "\n\n".join([p['html'] for p in pages])
+            combined_html = "\n\n".join([p['html'] for p in pages])[:400000]
 
         print(f"Final combined HTML length: {len(combined_html)} characters")
 
@@ -354,6 +354,9 @@ Content:
     # Fix: trailing commas before closing braces/brackets
     response_text = re.sub(r',(\s*[}\]])', r'\1', response_text)
 
+    # Fix: missing comma after closing brace/bracket when next line starts with quote
+    response_text = re.sub(r'(\}|\])\s*\n\s*"', r'\1,\n  "', response_text)
+
     # Parse JSON
     try:
         data = json.loads(response_text)
@@ -362,13 +365,14 @@ Content:
             print(f"WARNING: No sessions in response. Full response: {response_text[:1000]}")
         return data
     except json.JSONDecodeError as e:
-        # Try to provide a more helpful error with context around the error location
+        # Log more of the response for debugging
         error_pos = e.pos if hasattr(e, 'pos') else 0
-        context_start = max(0, error_pos - 100)
-        context_end = min(len(response_text), error_pos + 100)
+        context_start = max(0, error_pos - 200)
+        context_end = min(len(response_text), error_pos + 200)
         error_context = response_text[context_start:context_end]
 
         print(f"JSON parse error at position {error_pos}. Context: {error_context}")
+        print(f"First 2000 chars of response: {response_text[:2000]}")
         raise ValueError(f"Gemini returned invalid JSON: {e}\n\nError context: ...{error_context}...")
 
 

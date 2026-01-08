@@ -135,11 +135,18 @@ def camp_view(id):
         filters=[('camp_id', '=', id)]
     )
 
+    # Convert to dict list and sort by start date (then alphabetically by name)
+    sessions_list = entities_to_dict_list(sessions)
+    sessions_list.sort(key=lambda s: (
+        s.get('session_start_date') if s.get('session_start_date') else datetime.max,
+        s.get('name', '').lower()
+    ))
+
     return render_template(
         'camp_form.html',
         user=user,
         camp=entity_to_dict(camp),
-        sessions=entities_to_dict_list(sessions)
+        sessions=sessions_list
     )
 
 

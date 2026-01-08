@@ -61,9 +61,10 @@
     <thead>
         <tr>
             <th>Session Name</th>
-            <th>Ages/Grades</th>
+            <th>Start Date</th>
             <th>Duration</th>
             <th>Times</th>
+            <th>Ages/Grades</th>
             <th>Cost</th>
             <th>Actions</th>
         </tr>
@@ -75,6 +76,24 @@
                 <strong>{{ session.name }}</strong>
                 {% if session.url %}
                 <br><a href="{{ session.url }}" target="_blank" style="font-size: 11px; color: #4285f4;">View Details</a>
+                {% endif %}
+            </td>
+            <td>
+                {% if session.session_start_date %}
+                {% set date_parts = session.session_start_date.split('-') %}
+                {{ date_parts[1]|int }}/{{ date_parts[2]|int }}
+                {% else %}
+                <span style="color: #6c757d;">-</span>
+                {% endif %}
+            </td>
+            <td>
+                {{ session.duration_weeks }} week{% if session.duration_weeks != 1 %}s{% endif %}
+            </td>
+            <td style="font-size: 13px;">
+                {% if session.start_time and session.end_time %}
+                {{ session.start_time }} - {{ session.end_time }}
+                {% else %}
+                <span style="color: #6c757d;">Not set</span>
                 {% endif %}
             </td>
             <td style="font-size: 13px;">
@@ -89,16 +108,6 @@
                 {% endif %}
             </td>
             <td>
-                {{ session.duration_weeks }} week{% if session.duration_weeks != 1 %}s{% endif %}
-            </td>
-            <td style="font-size: 13px;">
-                {% if session.start_time and session.end_time %}
-                {{ session.start_time }} - {{ session.end_time }}
-                {% else %}
-                <span style="color: #6c757d;">Not set</span>
-                {% endif %}
-            </td>
-            <td>
                 {% if session.cost %}
                 ${{ "%.2f"|format(session.cost) }}
                 {% else %}
@@ -106,10 +115,10 @@
                 {% endif %}
             </td>
             <td class="actions">
-                <a href="{{ url_for('camps.session_view', id=session.id) }}" class="btn btn-secondary">Edit</a>
-                <form method="POST" action="{{ url_for('camps.session_delete', id=session.id) }}" style="display: inline;"
+                <a href="{{ url_for('camps.session_view', id=session.id) }}" class="btn btn-secondary" style="vertical-align: middle;">Edit</a>
+                <form method="POST" action="{{ url_for('camps.session_delete', id=session.id) }}" style="display: inline; vertical-align: middle;"
                       onsubmit="return confirm('Delete {{ session.name }}? This cannot be undone.');">
-                    <button type="submit" class="btn btn-danger">Delete</button>
+                    <button type="submit" class="btn btn-danger" style="vertical-align: middle;">Delete</button>
                 </form>
             </td>
         </tr>
