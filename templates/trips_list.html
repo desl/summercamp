@@ -38,11 +38,11 @@
                     Multiple days
                 </span>
             </td>
-            <td class="actions">
-                <a href="{{ url_for('family.trip_view', id=trip.id) }}" class="btn btn-secondary">Edit</a>
-                <form method="POST" action="{{ url_for('family.trip_delete', id=trip.id) }}" style="display: inline;"
+            <td class="actions" style="display: flex; gap: 5px; align-items: center;">
+                <a href="{{ url_for('family.trip_view', id=trip.id) }}" class="btn btn-secondary" style="padding: 6px 12px; line-height: 1.5; box-sizing: border-box; display: inline-block;">Edit</a>
+                <form method="POST" action="{{ url_for('family.trip_delete', id=trip.id) }}" style="margin: 0; display: inline-block;"
                       onsubmit="return confirm('Delete {{ trip.name }}? This cannot be undone.');">
-                    <button type="submit" class="btn btn-danger">Delete</button>
+                    <button type="submit" class="btn btn-danger" style="padding: 6px 12px; line-height: 1.5; box-sizing: border-box; display: inline-block;">Delete</button>
                 </form>
             </td>
         </tr>

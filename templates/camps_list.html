@@ -47,11 +47,11 @@
                     {{ camp.session_count }} session{% if camp.session_count != 1 %}s{% endif %}
                 </span>
             </td>
-            <td class="actions">
-                <a href="{{ url_for('camps.camp_view', id=camp.id) }}" class="btn btn-secondary">View/Edit</a>
-                <form method="POST" action="{{ url_for('camps.camp_delete', id=camp.id) }}" style="display: inline;"
+            <td class="actions" style="display: flex; gap: 5px; align-items: center;">
+                <a href="{{ url_for('camps.camp_view', id=camp.id) }}" class="btn btn-secondary" style="padding: 6px 12px; line-height: 1.5; box-sizing: border-box; display: inline-block;">View/Edit</a>
+                <form method="POST" action="{{ url_for('camps.camp_delete', id=camp.id) }}" style="margin: 0; display: inline-block;"
                       onsubmit="return confirm('Delete {{ camp.name }}? This cannot be undone.');">
-                    <button type="submit" class="btn btn-danger">Delete</button>
+                    <button type="submit" class="btn btn-danger" style="padding: 6px 12px; line-height: 1.5; box-sizing: border-box; display: inline-block;">Delete</button>
                 </form>
             </td>
         </tr>
