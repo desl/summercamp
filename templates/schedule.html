@@ -177,6 +177,149 @@
             min-width: 100px;
         }
     }
+
+    /* Modal Styles */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        overflow-y: auto;
+    }
+
+    .modal-content {
+        background-color: white;
+        margin: 50px auto;
+        max-width: 600px;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 20px;
+        border-bottom: 1px solid #dee2e6;
+        background-color: #2c3e50;
+        color: white;
+        border-radius: 8px 8px 0 0;
+    }
+
+    .modal-header h3 {
+        margin: 0;
+        font-size: 18px;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        color: white;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .modal-close:hover {
+        opacity: 0.8;
+    }
+
+    .modal-body {
+        padding: 20px;
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+
+    .modal-context {
+        color: #6c757d;
+        margin-bottom: 15px;
+        font-size: 14px;
+    }
+
+    .session-card {
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 12px 15px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .session-card:hover {
+        border-color: #4285f4;
+        background-color: #f8f9fa;
+    }
+
+    .session-card.loading {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+
+    .session-camp-name {
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 4px;
+    }
+
+    .session-name {
+        font-size: 14px;
+        color: #495057;
+    }
+
+    .session-details {
+        font-size: 12px;
+        color: #6c757d;
+        margin-top: 6px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .session-details span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .session-multi-week {
+        background-color: #fff3cd;
+        color: #856404;
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        margin-top: 6px;
+        display: inline-block;
+    }
+
+    .no-sessions-message {
+        text-align: center;
+        padding: 30px;
+        color: #6c757d;
+    }
+
+    .no-sessions-message a {
+        color: #4285f4;
+    }
+
+    .modal-loading {
+        text-align: center;
+        padding: 40px;
+        color: #6c757d;
+    }
+
+    .modal-error {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+    }
 </style>
 {% endblock %}
 
@@ -190,8 +333,9 @@
             </button>
         </form>
         <a href="{{ url_for('schedule.booking_new') }}" class="btn btn-success">+ Add Booking</a>
-        <form method="POST" action="{{ url_for('schedule.weeks_recalculate') }}" style="display: inline;">
-            <button type="submit" class="btn btn-secondary">Recalculate Weeks</button>
+        <form method="POST" action="{{ url_for('schedule.weeks_recalculate') }}" style="display: inline;"
+              onsubmit="return confirm('This will delete all bookings and recalculate weeks from scratch. Are you sure?');">
+            <button type="submit" class="btn btn-secondary">Reset &amp; Recalculate Weeks</button>
         </form>
         <form method="POST" action="{{ url_for('schedule.bookings_cleanup') }}" style="display: inline;">
             <button type="submit" class="btn btn-secondary">Cleanup Legacy Bookings</button>
@@ -215,10 +359,10 @@
         <strong>No weeks calculated yet.</strong>
     </p>
     <p style="margin: 10px 0 0 0;">
-        Click "Recalculate Weeks" to generate the summer schedule based on your kids' school dates.
+        Click "Calculate Weeks" to generate the summer schedule based on your kids' school dates.
     </p>
     <form method="POST" action="{{ url_for('schedule.weeks_recalculate') }}" style="display: inline; margin-top: 15px;">
-        <button type="submit" class="btn btn-primary">Recalculate Weeks</button>
+        <button type="submit" class="btn btn-primary">Calculate Weeks</button>
     </form>
 </div>
 {% else %}
@@ -247,7 +391,7 @@
                 {% for week in weeks %}
                 <td class="week-cell {% if week.is_blocked %}blocked{% endif %}">
                     {% if week.is_blocked %}
-                        <div class="blocked-indicator">🚫 Trip Blocked</div>
+                        <div class="blocked-indicator">🚫 {{ week_trips.get(week.id, 'Trip') }}</div>
                     {% else %}
                         {% set cell_key = (kid.id, week.id) %}
                         {% set cell_bookings = bookings_lookup.get(cell_key, []) %}
@@ -281,7 +425,11 @@
                             </div>
                             {% endfor %}
                         {% else %}
-                            <a href="{{ url_for('schedule.booking_new') }}?kid_id={{ kid.id }}&week_id={{ week.id }}" class="add-booking-btn">+ Add</a>
+                            <button type="button" class="add-booking-btn"
+                                data-kid-id="{{ kid.id }}"
+                                data-week-id="{{ week.id }}"
+                                data-kid-name="{{ kid.name }}"
+                                data-week-num="{{ week.week_number }}">+ Add</button>
                         {% endif %}
                     {% endif %}
                 </td>
@@ -308,13 +456,13 @@
                         {{ week.start_date|format_date_short }} - {{ week.end_date|format_date_short }}
                     </span>
                     {% if week.is_blocked %}
-                    <br><span style="font-size: 11px; color: #721c24;">🚫 Trip</span>
+                    <br><span style="font-size: 11px; color: #721c24;">🚫 {{ week_trips.get(week.id, 'Trip') }}</span>
                     {% endif %}
                 </td>
                 {% for kid in kids %}
                 <td class="week-cell {% if week.is_blocked %}blocked{% endif %}">
                     {% if week.is_blocked %}
-                        <div class="blocked-indicator">🚫 Trip Blocked</div>
+                        <div class="blocked-indicator">🚫 {{ week_trips.get(week.id, 'Trip') }}</div>
                     {% else %}
                         {% set cell_key = (kid.id, week.id) %}
                         {% set cell_bookings = bookings_lookup.get(cell_key, []) %}
@@ -348,7 +496,11 @@
                             </div>
                             {% endfor %}
                         {% else %}
-                            <a href="{{ url_for('schedule.booking_new') }}?kid_id={{ kid.id }}&week_id={{ week.id }}" class="add-booking-btn">+ Add</a>
+                            <button type="button" class="add-booking-btn"
+                                data-kid-id="{{ kid.id }}"
+                                data-week-id="{{ week.id }}"
+                                data-kid-name="{{ kid.name }}"
+                                data-week-num="{{ week.week_number }}">+ Add</button>
                         {% endif %}
                     {% endif %}
                 </td>
@@ -382,5 +534,201 @@
         </div>
     </div>
 </div>
+
+<!-- Session Selection Modal -->
+<div id="session-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Select a Camp Session</h3>
+            <button type="button" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p class="modal-context">
+                Adding session for <strong id="modal-kid-name"></strong> - <strong id="modal-week-info"></strong>
+            </p>
+            <div id="modal-error" class="modal-error" style="display: none;"></div>
+            <div id="session-list"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // Current modal state
+    let currentKidId = null;
+    let currentWeekId = null;
+
+    // Get modal elements
+    const modal = document.getElementById('session-modal');
+    const modalClose = modal.querySelector('.modal-close');
+    const modalKidName = document.getElementById('modal-kid-name');
+    const modalWeekInfo = document.getElementById('modal-week-info');
+    const modalError = document.getElementById('modal-error');
+    const sessionList = document.getElementById('session-list');
+
+    // Open modal when "+ Add" button is clicked
+    document.querySelectorAll('.add-booking-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const kidId = this.dataset.kidId;
+            const weekId = this.dataset.weekId;
+            const kidName = this.dataset.kidName;
+            const weekNum = this.dataset.weekNum;
+            openModal(kidId, weekId, kidName, weekNum);
+        });
+    });
+
+    // Close modal
+    modalClose.addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.style.display === 'block') {
+            closeModal();
+        }
+    });
+
+    function openModal(kidId, weekId, kidName, weekNum) {
+        currentKidId = kidId;
+        currentWeekId = weekId;
+
+        // Update modal header
+        modalKidName.textContent = kidName;
+        modalWeekInfo.textContent = 'Week ' + weekNum;
+
+        // Show modal with loading state
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+        modalError.style.display = 'none';
+        sessionList.innerHTML = '<div class="modal-loading">Loading sessions...</div>';
+
+        // Fetch sessions for this week
+        fetch('/schedule/api/sessions-for-week?week_id=' + encodeURIComponent(weekId) + '&kid_id=' + encodeURIComponent(kidId))
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                renderSessions(data.sessions, data.week);
+            })
+            .catch(err => {
+                showError('Failed to load sessions. Please try again.');
+                console.error('Error fetching sessions:', err);
+            });
+    }
+
+    function closeModal() {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+        currentKidId = null;
+        currentWeekId = null;
+    }
+
+    function showError(message) {
+        modalError.textContent = message;
+        modalError.style.display = 'block';
+    }
+
+    function renderSessions(sessions, week) {
+        if (!sessions || sessions.length === 0) {
+            sessionList.innerHTML = `
+                <div class="no-sessions-message">
+                    <p>No sessions available for this week.</p>
+                    <p><a href="/camps/">Add camps and sessions</a> first.</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        sessions.forEach(session => {
+            const cost = session.cost ? '$' + session.cost : '';
+            const duration = session.duration_weeks > 1 ? session.duration_weeks + '-week session' : '';
+
+            let dateInfo = '';
+            if (session.session_start_date && session.session_end_date) {
+                dateInfo = formatDate(session.session_start_date) + ' - ' + formatDate(session.session_end_date);
+            }
+
+            let timeInfo = session.time_info || '';
+
+            html += `
+                <div class="session-card" data-session-id="${session.id}">
+                    <div class="session-camp-name">${escapeHtml(session.camp_name)}</div>
+                    <div class="session-name">${escapeHtml(session.name)}</div>
+                    <div class="session-details">
+                        ${cost ? '<span>' + cost + '</span>' : ''}
+                        ${dateInfo ? '<span>' + dateInfo + '</span>' : ''}
+                        ${timeInfo ? '<span>' + escapeHtml(timeInfo) + '</span>' : ''}
+                    </div>
+                    ${duration ? '<div class="session-multi-week">' + duration + '</div>' : ''}
+                </div>
+            `;
+        });
+
+        sessionList.innerHTML = html;
+
+        // Add click handlers to session cards
+        sessionList.querySelectorAll('.session-card').forEach(card => {
+            card.addEventListener('click', function() {
+                const sessionId = this.dataset.sessionId;
+                createBooking(sessionId, this);
+            });
+        });
+    }
+
+    function createBooking(sessionId, cardElement) {
+        // Show loading state
+        cardElement.classList.add('loading');
+        modalError.style.display = 'none';
+
+        fetch('/schedule/api/quick-booking', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                kid_id: currentKidId,
+                session_id: sessionId,
+                week_id: currentWeekId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                cardElement.classList.remove('loading');
+                showError(data.error);
+                return;
+            }
+            // Success - reload the page to show the new booking
+            window.location.reload();
+        })
+        .catch(err => {
+            cardElement.classList.remove('loading');
+            showError('Failed to create booking. Please try again.');
+            console.error('Error creating booking:', err);
+        });
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+})();
+</script>
 {% endif %}
 {% endblock %}

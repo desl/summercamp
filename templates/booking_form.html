@@ -139,12 +139,14 @@
             {% if booking %}Update Booking{% else %}Create Booking{% endif %}
         </button>
         <a href="{{ url_for('schedule.schedule_view') }}" class="btn btn-secondary">Cancel</a>
-        {% if booking %}
-        <form method="POST" action="{{ url_for('schedule.booking_delete', id=booking.id) }}" style="display: inline; margin-left: auto;"
-              onsubmit="return confirm('Delete this booking? This cannot be undone.');">
-            <button type="submit" class="btn btn-danger">Delete Booking</button>
-        </form>
-        {% endif %}
     </div>
 </form>
+
+{% if booking %}
+<!-- Delete form must be outside the main form - HTML doesn't allow nested forms -->
+<form method="POST" action="{{ url_for('schedule.booking_delete', id=booking.id) }}" style="margin-top: 20px;"
+      onsubmit="return confirm('Delete this booking? This cannot be undone.');">
+    <button type="submit" class="btn btn-danger">Delete Booking</button>
+</form>
+{% endif %}
 {% endblock %}

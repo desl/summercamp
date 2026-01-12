@@ -172,6 +172,45 @@ function loadSession(index) {
 }
 
 /**
+ * Calculate duration in weeks from start and end dates.
+ *
+ * Weeks are 5 days long for camp purposes. For Mon-Fri camps,
+ * weekends are excluded from the count.
+ */
+function calculateDurationWeeks(startDateStr, endDateStr) {
+    if (!startDateStr || !endDateStr) return 1;
+
+    const startDate = new Date(startDateStr);
+    const endDate = new Date(endDateStr);
+
+    if (isNaN(startDate) || isNaN(endDate)) return 1;
+
+    // Calculate total days (inclusive)
+    let totalDays = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+
+    // Check if it's a Mon-Fri camp (starts Monday=1, ends Friday=5)
+    const startDay = startDate.getDay(); // 0=Sunday, 1=Monday, etc.
+    const endDay = endDate.getDay();
+
+    if (startDay === 1 && endDay === 5) {
+        // Mon-Fri camp - count only weekdays
+        let businessDays = 0;
+        const current = new Date(startDate);
+        while (current <= endDate) {
+            const day = current.getDay();
+            if (day !== 0 && day !== 6) { // Not Sunday or Saturday
+                businessDays++;
+            }
+            current.setDate(current.getDate() + 1);
+        }
+        totalDays = businessDays;
+    }
+
+    // Calculate weeks (5 days = 1 week, round up)
+    return Math.ceil(totalDays / 5);
+}
+
+/**
  * Fill the session form with extracted data.
  */
 function fillFormWithData(data, sessionIndex = 0) {
@@ -187,17 +226,20 @@ function fillFormWithData(data, sessionIndex = 0) {
         setValue('url', session.url);
     }
 
-    // Duration (default to 1 if not specified)
-    if (session.duration_weeks) {
-        setValue('duration_weeks', session.duration_weeks);
-    }
-
-    // Dates
+    // Dates - set first before calculating duration
     if (session.session_start_date) {
         setValue('session_start_date', session.session_start_date);
     }
     if (session.session_end_date) {
         setValue('session_end_date', session.session_end_date);
+    }
+
+    // Duration - calculate from dates if both are available, otherwise use provided value
+    if (session.session_start_date && session.session_end_date) {
+        const calculatedDuration = calculateDurationWeeks(session.session_start_date, session.session_end_date);
+        setValue('duration_weeks', calculatedDuration);
+    } else if (session.duration_weeks) {
+        setValue('duration_weeks', session.duration_weeks);
     }
 
     // Eligibility

@@ -29,6 +29,7 @@ from datastore_helpers import (
     entity_to_dict,
     entities_to_dict_list
 )
+from schedule import update_week_blocking  # For updating week blocking after trip changes
 from datetime import datetime, date
 
 # Create the blueprint
@@ -405,8 +406,10 @@ def trip_new():
             }
         )
 
+        # Recalculate weeks to update blocked status
+        update_week_blocking(client, user['email'])
+
         flash(f"Trip '{request.form['name']}' created successfully!", 'success')
-        # TODO Phase 2: Recalculate weeks to mark blocked weeks
         return redirect(url_for('family.trips_list'))
 
     # GET request - show the form
@@ -478,8 +481,10 @@ def trip_update(id):
         }
     )
 
+    # Recalculate weeks to update blocked status
+    update_week_blocking(client, user['email'])
+
     flash(f"Trip '{request.form['name']}' updated successfully!", 'success')
-    # TODO Phase 2: Recalculate weeks to update blocked weeks
     return redirect(url_for('family.trips_list'))
 
 
@@ -506,6 +511,8 @@ def trip_delete(id):
     name = trip['name']
     delete_entity(client, trip)
 
+    # Recalculate weeks to update blocked status
+    update_week_blocking(client, user['email'])
+
     flash(f"Trip '{name}' deleted successfully.", 'success')
-    # TODO Phase 2: Recalculate weeks to unblock weeks
     return redirect(url_for('family.trips_list'))

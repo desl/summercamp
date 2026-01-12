@@ -29,12 +29,57 @@ from datastore_helpers import (
 )
 from calendar_integration import delete_booking_event
 from datetime import datetime, timedelta
+import math
 import re
 import json
 from ai_parser import parse_session_url
 
 # Create the blueprint
 camps_bp = Blueprint('camps', __name__, url_prefix='/camps')
+
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def calculate_duration_weeks(start_date, end_date):
+    """
+    Calculate duration in weeks from start and end dates.
+
+    Weeks are 5 days long for camp purposes. Any number of days is rounded
+    up to make weeks an integer.
+
+    Examples:
+        - 1-5 days = 1 week
+        - 6-10 days = 2 weeks
+        - 11-15 days = 3 weeks
+
+    For camps that run Mon-Fri, weekends are excluded from the count.
+    A camp starting Thursday and ending Sunday is 4 days = 1 week.
+    """
+    if not start_date or not end_date:
+        return 1
+
+    # Calculate total days between dates (inclusive)
+    total_days = (end_date - start_date).days + 1
+
+    # If camp starts Monday (0) and ends Friday (4), it's a Mon-Fri camp
+    # In this case, count only weekdays
+    start_weekday = start_date.weekday()  # 0=Monday, 6=Sunday
+    end_weekday = end_date.weekday()
+
+    if start_weekday == 0 and end_weekday == 4:
+        # Mon-Fri camp - count business days only
+        business_days = 0
+        current = start_date
+        while current <= end_date:
+            if current.weekday() < 5:  # Monday to Friday
+                business_days += 1
+            current += timedelta(days=1)
+        total_days = business_days
+
+    # Calculate weeks (5 days = 1 week, round up)
+    return math.ceil(total_days / 5)
 
 
 # ============================================================================
@@ -707,7 +752,7 @@ def session_bulk_create(camp_id):
             if session_data.get('session_start_date'):
                 try:
                     session_start_date = datetime.strptime(
-                        session_data['session_start_date'], 
+                        session_data['session_start_date'],
                         '%Y-%m-%d'
                     )
                 except ValueError:
@@ -715,12 +760,18 @@ def session_bulk_create(camp_id):
             if session_data.get('session_end_date'):
                 try:
                     session_end_date = datetime.strptime(
-                        session_data['session_end_date'], 
+                        session_data['session_end_date'],
                         '%Y-%m-%d'
                     )
                 except ValueError:
                     pass
-            
+
+            # Calculate duration_weeks from dates if available
+            if session_start_date and session_end_date:
+                duration_weeks = calculate_duration_weeks(session_start_date, session_end_date)
+            else:
+                duration_weeks = session_data.get('duration_weeks', 1)
+
             # Create the session entity
             create_entity(
                 client,
@@ -733,7 +784,7 @@ def session_bulk_create(camp_id):
                     'age_max': age_max,
                     'grade_min': grade_min,
                     'grade_max': grade_max,
-                    'duration_weeks': session_data.get('duration_weeks', 1),
+                    'duration_weeks': duration_weeks,
                     'session_start_date': session_start_date,
                     'session_end_date': session_end_date,
                     'holidays': [],

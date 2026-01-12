@@ -62,6 +62,7 @@
         <tr>
             <th>Session Name</th>
             <th>Ages/Grades</th>
+            <th>Dates</th>
             <th>Duration</th>
             <th>Times</th>
             <th>Cost</th>
@@ -86,6 +87,13 @@
                 {% endif %}
                 {% if not session.age_min and not session.age_max and session.grade_min is none and session.grade_max is none %}
                     <span style="color: #6c757d;">Not specified</span>
+                {% endif %}
+            </td>
+            <td style="font-size: 13px;">
+                {% if session.session_start_date and session.session_end_date %}
+                {{ session.session_start_date|format_date_short }} - {{ session.session_end_date|format_date_short }}
+                {% else %}
+                <span style="color: #6c757d;">Not set</span>
                 {% endif %}
             </td>
             <td>
