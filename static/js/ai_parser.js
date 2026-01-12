@@ -25,6 +25,19 @@ async function parseUrl() {
         return;
     }
 
+    // Validate URL format
+    try {
+        const urlObj = new URL(url);
+        // Ensure it's http or https
+        if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+            showStatus('Invalid URL: Must be an HTTP or HTTPS URL', 'error');
+            return;
+        }
+    } catch (e) {
+        showStatus('Invalid URL: Please enter a valid web address (e.g., https://example.com)', 'error');
+        return;
+    }
+
     // Disable button and show loading state
     parseButton.disabled = true;
     parseButton.textContent = 'Parsing...';

@@ -18,6 +18,73 @@ import vertexai
 from vertexai.generative_models import GenerativeModel, GenerationConfig
 import json
 import re
+import math
+
+
+def calculate_session_durations(extracted_data):
+    """
+    Calculate duration_weeks from session start and end dates.
+
+    Rules:
+    - Camps are 5 days per week (Mon-Fri typically)
+    - If a camp starts Monday and ends Friday, don't count weekends
+    - Round up to integer weeks
+    - Examples: 3 days = 1 week, 6 days = 2 weeks
+
+    Args:
+        extracted_data: Dict with sessions array
+    """
+    sessions = extracted_data.get('sessions', [])
+
+    for session in sessions:
+        start_date_str = session.get('session_start_date')
+        end_date_str = session.get('session_end_date')
+
+        if not start_date_str or not end_date_str:
+            # If no dates, leave duration as-is or default to 1
+            if 'duration_weeks' not in session or session['duration_weeks'] is None:
+                session['duration_weeks'] = 1
+            continue
+
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+
+            # Calculate total days (inclusive)
+            total_days = (end_date - start_date).days + 1
+
+            # Check if it's a Monday-Friday camp (starts Monday, ends Friday)
+            # Monday = 0, Friday = 4
+            starts_monday = start_date.weekday() == 0
+            ends_friday = end_date.weekday() == 4
+
+            if starts_monday and ends_friday and total_days >= 5:
+                # This is a Monday-Friday camp spanning one or more weeks
+                # Don't count weekends
+                # Calculate number of full weeks
+                full_weeks = total_days // 7
+                remaining_days = total_days % 7
+
+                # Each full week has 5 camp days
+                # Remaining days (if any) are weekdays
+                camp_days = full_weeks * 5 + min(remaining_days, 5)
+            else:
+                # For camps that don't follow Mon-Fri pattern, count all days
+                camp_days = total_days
+
+            # Convert camp days to weeks (5 days = 1 week)
+            # Round up: 3 days = 1 week, 6 days = 2 weeks
+            duration_weeks = math.ceil(camp_days / 5)
+
+            session['duration_weeks'] = max(1, duration_weeks)  # At least 1 week
+
+            print(f"Calculated duration for {session.get('name', 'session')}: {total_days} total days -> {camp_days} camp days -> {duration_weeks} weeks")
+
+        except (ValueError, TypeError) as e:
+            # If date parsing fails, default to 1 week
+            print(f"Error calculating duration for session: {e}")
+            if 'duration_weeks' not in session or session['duration_weeks'] is None:
+                session['duration_weeks'] = 1
 
 
 def parse_session_url(url, project_id, region, model_name):
@@ -41,22 +108,22 @@ def parse_session_url(url, project_id, region, model_name):
         if len(pages) == 0:
             print(f"WARNING: No pages fetched for URL: {url}")
 
-        # Prioritize the main page (depth 0) - send up to 500K of it
-        # Then add additional pages if there's room
+        # Prioritize the main page (depth 0) - send up to 300K of it
+        # Then add additional pages if there's room (max 400K total for faster processing)
         main_page = next((p for p in pages if p['depth'] == 0), None)
         if main_page:
             # Take more content from the main page
-            combined_html = main_page['html'][:500000]
-            print(f"Using main page HTML (up to 500K): {len(combined_html)} characters")
+            combined_html = main_page['html'][:300000]
+            print(f"Using main page HTML (up to 300K): {len(combined_html)} characters")
 
             # Add other pages if we have room
             for page in pages:
-                if page['depth'] > 0 and len(combined_html) < 700000:
-                    remaining_space = 700000 - len(combined_html)
+                if page['depth'] > 0 and len(combined_html) < 400000:
+                    remaining_space = 400000 - len(combined_html)
                     combined_html += "\n\n" + page['html'][:remaining_space]
         else:
             # Fallback to combining all pages
-            combined_html = "\n\n".join([p['html'] for p in pages])
+            combined_html = "\n\n".join([p['html'] for p in pages])[:400000]
 
         print(f"Final combined HTML length: {len(combined_html)} characters")
 
@@ -68,6 +135,9 @@ def parse_session_url(url, project_id, region, model_name):
             region,
             model_name
         )
+
+        # Calculate duration_weeks from dates for each session
+        calculate_session_durations(extracted_data)
 
         # Detect stale data
         staleness_info = detect_stale_data(extracted_data)
@@ -354,6 +424,9 @@ Content:
     # Fix: trailing commas before closing braces/brackets
     response_text = re.sub(r',(\s*[}\]])', r'\1', response_text)
 
+    # Fix: missing comma after closing brace/bracket when next line starts with quote
+    response_text = re.sub(r'(\}|\])\s*\n\s*"', r'\1,\n  "', response_text)
+
     # Parse JSON
     try:
         data = json.loads(response_text)
@@ -362,13 +435,14 @@ Content:
             print(f"WARNING: No sessions in response. Full response: {response_text[:1000]}")
         return data
     except json.JSONDecodeError as e:
-        # Try to provide a more helpful error with context around the error location
+        # Log more of the response for debugging
         error_pos = e.pos if hasattr(e, 'pos') else 0
-        context_start = max(0, error_pos - 100)
-        context_end = min(len(response_text), error_pos + 100)
+        context_start = max(0, error_pos - 200)
+        context_end = min(len(response_text), error_pos + 200)
         error_context = response_text[context_start:context_end]
 
         print(f"JSON parse error at position {error_pos}. Context: {error_context}")
+        print(f"First 2000 chars of response: {response_text[:2000]}")
         raise ValueError(f"Gemini returned invalid JSON: {e}\n\nError context: ...{error_context}...")
 
 

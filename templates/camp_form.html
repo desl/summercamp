@@ -63,8 +63,10 @@
             <th>Session Name</th>
             <th>Ages/Grades</th>
             <th>Dates</th>
+            <th>Start Date</th>
             <th>Duration</th>
             <th>Times</th>
+            <th>Ages/Grades</th>
             <th>Cost</th>
             <th>Actions</th>
         </tr>
@@ -78,15 +80,12 @@
                 <br><a href="{{ session.url }}" target="_blank" style="font-size: 11px; color: #4285f4;">View Details</a>
                 {% endif %}
             </td>
-            <td style="font-size: 13px;">
-                {% if session.age_min or session.age_max %}
-                    Ages: {% if session.age_min %}{{ session.age_min }}{% else %}?{% endif %}-{% if session.age_max %}{{ session.age_max }}{% else %}?{% endif %}<br>
-                {% endif %}
-                {% if session.grade_min is not none or session.grade_max is not none %}
-                    Grades: {% if session.grade_min is not none %}{{ session.grade_min }}{% else %}?{% endif %}-{% if session.grade_max is not none %}{{ session.grade_max }}{% else %}?{% endif %}
-                {% endif %}
-                {% if not session.age_min and not session.age_max and session.grade_min is none and session.grade_max is none %}
-                    <span style="color: #6c757d;">Not specified</span>
+            <td>
+                {% if session.session_start_date %}
+                {% set date_parts = session.session_start_date.split('-') %}
+                {{ date_parts[1]|int }}/{{ date_parts[2]|int }}
+                {% else %}
+                <span style="color: #6c757d;">-</span>
                 {% endif %}
             </td>
             <td style="font-size: 13px;">
@@ -106,6 +105,17 @@
                 <span style="color: #6c757d;">Not set</span>
                 {% endif %}
             </td>
+            <td style="font-size: 13px;">
+                {% if session.age_min or session.age_max %}
+                    Ages: {% if session.age_min %}{{ session.age_min }}{% else %}?{% endif %}-{% if session.age_max %}{{ session.age_max }}{% else %}?{% endif %}<br>
+                {% endif %}
+                {% if session.grade_min is not none or session.grade_max is not none %}
+                    Grades: {% if session.grade_min is not none %}{{ session.grade_min }}{% else %}?{% endif %}-{% if session.grade_max is not none %}{{ session.grade_max }}{% else %}?{% endif %}
+                {% endif %}
+                {% if not session.age_min and not session.age_max and session.grade_min is none and session.grade_max is none %}
+                    <span style="color: #6c757d;">Not specified</span>
+                {% endif %}
+            </td>
             <td>
                 {% if session.cost %}
                 ${{ "%.2f"|format(session.cost) }}
@@ -113,11 +123,11 @@
                 <span style="color: #6c757d;">-</span>
                 {% endif %}
             </td>
-            <td class="actions">
-                <a href="{{ url_for('camps.session_view', id=session.id) }}" class="btn btn-secondary">Edit</a>
-                <form method="POST" action="{{ url_for('camps.session_delete', id=session.id) }}" style="display: inline;"
+            <td class="actions" style="display: flex; gap: 5px; align-items: center;">
+                <a href="{{ url_for('camps.session_view', id=session.id) }}" class="btn btn-secondary" style="padding: 6px 12px; line-height: 1.5; box-sizing: border-box; display: inline-block;">Edit</a>
+                <form method="POST" action="{{ url_for('camps.session_delete', id=session.id) }}" style="margin: 0; display: inline-block;"
                       onsubmit="return confirm('Delete {{ session.name }}? This cannot be undone.');">
-                    <button type="submit" class="btn btn-danger">Delete</button>
+                    <button type="submit" class="btn btn-danger" style="padding: 6px 12px; line-height: 1.5; box-sizing: border-box; display: inline-block;">Delete</button>
                 </form>
             </td>
         </tr>
