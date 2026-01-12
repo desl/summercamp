@@ -180,6 +180,10 @@
             cursor: pointer;
             transition: background-color 0.3s;
             display: inline-block;
+            box-sizing: border-box;
+            vertical-align: middle;
+            line-height: 1.2;
+            font-family: inherit;
         }
 
         .btn-primary {
@@ -292,12 +296,18 @@
         .actions {
             display: flex;
             gap: 10px;
+            align-items: center;
         }
 
         .actions a,
         .actions button {
             font-size: 13px;
             padding: 6px 12px;
+            height: auto;
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
 
         /* Mobile responsive */

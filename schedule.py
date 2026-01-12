@@ -146,6 +146,39 @@ def calculate_weeks_for_user(client, user_email):
     return weeks
 
 
+def update_week_blocking(client, user_email):
+    """
+    Update the is_blocked status on all weeks based on current trips.
+
+    Unlike calculate_weeks_for_user, this does NOT delete/recreate weeks.
+    It only updates the blocking status, preserving week IDs and bookings.
+
+    Use this after trip changes (create, update, delete).
+    """
+    # Get all weeks and trips for this user
+    weeks = query_by_user(client, 'Week', user_email)
+    trips = list(query_by_user(client, 'Trip', user_email))
+
+    for week in weeks:
+        week_start = week['start_date']
+        week_end = week['end_date']
+
+        # Check if any trip overlaps with this week
+        is_blocked = False
+        for trip in trips:
+            trip_start = trip['start_date']
+            trip_end = trip['end_date']
+
+            # Check if trip overlaps with this week
+            if trip_start <= week_end and trip_end >= week_start:
+                is_blocked = True
+                break
+
+        # Update if blocking status changed
+        if week.get('is_blocked') != is_blocked:
+            update_entity(client, week, {'is_blocked': is_blocked})
+
+
 # ============================================================================
 # WEEK ROUTES
 # ============================================================================
@@ -832,10 +865,11 @@ def schedule_view():
     # Get view preference from cookie (default to horizontal)
     view_mode = request.cookies.get('schedule_view', 'horizontal')
 
-    # Get all kids, weeks, and bookings
+    # Get all kids, weeks, bookings, and trips
     kids = query_by_user(client, 'Kid', user['email'], order_by='name')
     weeks = query_by_user(client, 'Week', user['email'], order_by='week_number')
     bookings = query_by_user(client, 'Booking', user['email'])
+    trips = list(query_by_user(client, 'Trip', user['email']))
 
     # Build a lookup: (kid_id, week_id) -> [bookings]
     bookings_lookup = {}
@@ -857,12 +891,28 @@ def schedule_view():
 
         bookings_lookup[key].append(booking_dict)
 
+    # Build a lookup: week_id -> trip_name (for blocked weeks)
+    week_trips = {}
+    weeks_list = list(weeks)
+    for week in weeks_list:
+        if week.get('is_blocked'):
+            week_start = week['start_date']
+            week_end = week['end_date']
+            for trip in trips:
+                trip_start = trip['start_date']
+                trip_end = trip['end_date']
+                # Check if trip overlaps with this week
+                if trip_start <= week_end and trip_end >= week_start:
+                    week_trips[week.key.name] = trip['name']
+                    break
+
     return render_template(
         'schedule.html',
         user=user,
         kids=entities_to_dict_list(kids),
-        weeks=entities_to_dict_list(weeks),
+        weeks=entities_to_dict_list(weeks_list),
         bookings_lookup=bookings_lookup,
+        week_trips=week_trips,
         view_mode=view_mode
     )
 
@@ -883,3 +933,198 @@ def toggle_view():
     response.set_cookie('schedule_view', new_view, max_age=365*24*60*60)
 
     return response
+
+
+# ============================================================================
+# API ENDPOINTS FOR MODAL BOOKING
+# ============================================================================
+
+@schedule_bp.route('/api/sessions-for-week')
+@login_required
+def api_sessions_for_week():
+    """
+    Return sessions that match a week's date range.
+
+    Used by the modal booking UI to show filtered sessions.
+    """
+    user = get_current_user()
+    client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
+
+    week_id = request.args.get('week_id')
+    kid_id = request.args.get('kid_id')
+
+    if not week_id:
+        return jsonify({'error': 'week_id is required'}), 400
+
+    # Get the week to determine date range
+    week = get_entity_for_user(client, 'Week', week_id, user['email'])
+    if not week:
+        return jsonify({'error': 'Week not found'}), 404
+
+    week_start = week['start_date']
+    week_end = week['end_date']
+
+    # Get all camps and their sessions
+    camps = query_by_user(client, 'Camp', user['email'], order_by='name')
+    result_sessions = []
+
+    for camp in camps:
+        sessions = query_by_user(
+            client,
+            'Session',
+            user['email'],
+            filters=[('camp_id', '=', camp.key.name)]
+        )
+
+        for session_entity in sessions:
+            session_dict = entity_to_dict(session_entity)
+            session_dict['camp_name'] = camp['name']
+            session_dict['camp_id'] = camp.key.name
+
+            # Check if session matches the week
+            # A session matches if at least one day of the session falls within the week
+            session_start = session_entity.get('session_start_date')
+            session_end = session_entity.get('session_end_date')
+
+            include_session = False
+
+            if not session_start or not session_end:
+                # Sessions without dates are always shown
+                include_session = True
+            else:
+                # Check for actual date overlap (no buffer)
+                # Session overlaps week if: session_start <= week_end AND session_end >= week_start
+                if session_start <= week_end and session_end >= week_start:
+                    include_session = True
+
+            if include_session:
+                result_sessions.append(session_dict)
+
+    return jsonify({
+        'sessions': result_sessions,
+        'week': entity_to_dict(week)
+    })
+
+
+@schedule_bp.route('/api/quick-booking', methods=['POST'])
+@login_required
+def api_quick_booking():
+    """
+    Create a booking with minimal data (defaults to 'idea' state).
+
+    Used by the modal booking UI for quick session selection.
+    """
+    user = get_current_user()
+    client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    kid_id = data.get('kid_id')
+    session_id = data.get('session_id')
+    week_id = data.get('week_id')
+
+    if not kid_id or not session_id or not week_id:
+        return jsonify({'error': 'kid_id, session_id, and week_id are required'}), 400
+
+    # Validate ownership
+    kid = get_entity_for_user(client, 'Kid', kid_id, user['email'])
+    session_entity = get_entity_for_user(client, 'Session', session_id, user['email'])
+    week = get_entity_for_user(client, 'Week', week_id, user['email'])
+
+    if not kid or not session_entity or not week:
+        return jsonify({'error': 'Invalid kid, session, or week'}), 404
+
+    # Get session duration for multi-week sessions
+    duration_weeks = session_entity.get('duration_weeks', 1)
+
+    # Get all weeks to determine consecutive weeks for multi-week sessions
+    all_weeks = query_by_user(client, 'Week', user['email'], order_by='week_number')
+    week_list = list(all_weeks)
+
+    # Find the starting week index
+    start_week_idx = None
+    for idx, w in enumerate(week_list):
+        if w.key.name == week_id:
+            start_week_idx = idx
+            break
+
+    if start_week_idx is None:
+        return jsonify({'error': 'Selected week not found'}), 404
+
+    # Check if we have enough consecutive weeks
+    if start_week_idx + duration_weeks > len(week_list):
+        return jsonify({
+            'error': f'Not enough weeks available for this {duration_weeks}-week session'
+        }), 400
+
+    # Get the weeks needed for this booking
+    weeks_needed = week_list[start_week_idx:start_week_idx + duration_weeks]
+
+    # Check if any of the needed weeks are blocked by trips
+    for w in weeks_needed:
+        if w.get('is_blocked'):
+            return jsonify({
+                'error': f'Week {w["week_number"]} is blocked by a family trip'
+            }), 400
+
+    # Check for booking collisions with booked camps
+    for w in weeks_needed:
+        existing_bookings = query_by_user(
+            client,
+            'Booking',
+            user['email'],
+            filters=[('kid_id', '=', kid_id), ('week_id', '=', w.key.name)]
+        )
+
+        for existing in existing_bookings:
+            if existing['state'] == 'booked':
+                existing_session = get_entity_for_user(client, 'Session', existing['session_id'], user['email'])
+                existing_camp = None
+                if existing_session:
+                    existing_camp = get_entity_for_user(client, 'Camp', existing_session['camp_id'], user['email'])
+
+                camp_name = existing_camp['name'] if existing_camp else 'Unknown'
+                return jsonify({
+                    'error': f'{kid["name"]} already has a booked camp for Week {w["week_number"]}: {camp_name}'
+                }), 400
+
+    # Generate a booking group ID for multi-week sessions
+    booking_group_id = str(uuid.uuid4())
+
+    # Create bookings for each week
+    created_bookings = []
+    for week_num, w in enumerate(weeks_needed, start=1):
+        booking = create_entity(
+            client,
+            'Booking',
+            user['email'],
+            {
+                'kid_id': kid_id,
+                'session_id': session_id,
+                'week_id': w.key.name,
+                'state': 'idea',
+                'preference_order': 0,
+                'friends_attending': [],
+                'uses_early_care': False,
+                'uses_late_care': False,
+                'notes': '',
+                'calendar_event_id': None,
+                'booking_group_id': booking_group_id,
+                'week_of_session': week_num,
+                'total_weeks': duration_weeks
+            }
+        )
+        created_bookings.append(entity_to_dict(booking))
+
+    # Get camp name for response
+    camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], user['email'])
+    camp_name = camp['name'] if camp else 'Unknown'
+
+    return jsonify({
+        'success': True,
+        'message': f'Added {camp_name} - {session_entity["name"]} for {kid["name"]}',
+        'bookings': created_bookings,
+        'duration_weeks': duration_weeks
+    })
