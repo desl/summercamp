@@ -396,41 +396,38 @@
                         {% set cell_key = (kid.id, week.id) %}
                         {% set cell_bookings = bookings_lookup.get(cell_key, []) %}
 
-                        {% if cell_bookings %}
-                            {% for booking in cell_bookings %}
-                            <div class="booking {{ booking.state }}">
-                                <div class="booking-camp">{{ booking.camp_name }}</div>
-                                <div class="booking-session">
-                                    {{ booking.session_name }}
-                                    {% if booking.total_weeks and booking.total_weeks > 1 %}
-                                    <span style="font-size: 10px; opacity: 0.8;"> (week {{ booking.week_of_session }} of {{ booking.total_weeks }})</span>
-                                    {% endif %}
-                                </div>
-                                <div class="booking-actions">
-                                    <a href="{{ url_for('schedule.booking_view', id=booking.id) }}" style="text-decoration: none; color: inherit;">
-                                        <button type="button">Edit</button>
-                                    </a>
-                                    {% if booking.state != 'booked' %}
-                                    <form method="POST" action="{{ url_for('schedule.booking_change_state', id=booking.id) }}" style="display: inline;">
-                                        {% if booking.state == 'idea' %}
-                                        <input type="hidden" name="state" value="preferred">
-                                        <button type="submit">→ Pref</button>
-                                        {% elif booking.state == 'preferred' %}
-                                        <input type="hidden" name="state" value="booked">
-                                        <button type="submit">→ Book</button>
-                                        {% endif %}
-                                    </form>
-                                    {% endif %}
-                                </div>
+                        {% for booking in cell_bookings %}
+                        <div class="booking {{ booking.state }}">
+                            <div class="booking-camp">{{ booking.camp_name }}</div>
+                            <div class="booking-session">
+                                {{ booking.session_name }}
+                                {% if booking.total_weeks and booking.total_weeks > 1 %}
+                                <span style="font-size: 10px; opacity: 0.8;"> (week {{ booking.week_of_session }} of {{ booking.total_weeks }})</span>
+                                {% endif %}
                             </div>
-                            {% endfor %}
-                        {% else %}
-                            <button type="button" class="add-booking-btn"
-                                data-kid-id="{{ kid.id }}"
-                                data-week-id="{{ week.id }}"
-                                data-kid-name="{{ kid.name }}"
-                                data-week-num="{{ week.week_number }}">+ Add</button>
-                        {% endif %}
+                            <div class="booking-actions">
+                                <a href="{{ url_for('schedule.booking_view', id=booking.id) }}" style="text-decoration: none; color: inherit;">
+                                    <button type="button">Edit</button>
+                                </a>
+                                {% if booking.state != 'booked' %}
+                                <form method="POST" action="{{ url_for('schedule.booking_change_state', id=booking.id) }}" style="display: inline;">
+                                    {% if booking.state == 'idea' %}
+                                    <input type="hidden" name="state" value="preferred">
+                                    <button type="submit">→ Pref</button>
+                                    {% elif booking.state == 'preferred' %}
+                                    <input type="hidden" name="state" value="booked">
+                                    <button type="submit">→ Book</button>
+                                    {% endif %}
+                                </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                        <button type="button" class="add-booking-btn"
+                            data-kid-id="{{ kid.id }}"
+                            data-week-id="{{ week.id }}"
+                            data-kid-name="{{ kid.name }}"
+                            data-week-num="{{ week.week_number }}">+ Add</button>
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -467,41 +464,38 @@
                         {% set cell_key = (kid.id, week.id) %}
                         {% set cell_bookings = bookings_lookup.get(cell_key, []) %}
 
-                        {% if cell_bookings %}
-                            {% for booking in cell_bookings %}
-                            <div class="booking {{ booking.state }}">
-                                <div class="booking-camp">{{ booking.camp_name }}</div>
-                                <div class="booking-session">
-                                    {{ booking.session_name }}
-                                    {% if booking.total_weeks and booking.total_weeks > 1 %}
-                                    <span style="font-size: 10px; opacity: 0.8;"> (week {{ booking.week_of_session }} of {{ booking.total_weeks }})</span>
-                                    {% endif %}
-                                </div>
-                                <div class="booking-actions">
-                                    <a href="{{ url_for('schedule.booking_view', id=booking.id) }}" style="text-decoration: none; color: inherit;">
-                                        <button type="button">Edit</button>
-                                    </a>
-                                    {% if booking.state != 'booked' %}
-                                    <form method="POST" action="{{ url_for('schedule.booking_change_state', id=booking.id) }}" style="display: inline;">
-                                        {% if booking.state == 'idea' %}
-                                        <input type="hidden" name="state" value="preferred">
-                                        <button type="submit">→ Pref</button>
-                                        {% elif booking.state == 'preferred' %}
-                                        <input type="hidden" name="state" value="booked">
-                                        <button type="submit">→ Book</button>
-                                        {% endif %}
-                                    </form>
-                                    {% endif %}
-                                </div>
+                        {% for booking in cell_bookings %}
+                        <div class="booking {{ booking.state }}">
+                            <div class="booking-camp">{{ booking.camp_name }}</div>
+                            <div class="booking-session">
+                                {{ booking.session_name }}
+                                {% if booking.total_weeks and booking.total_weeks > 1 %}
+                                <span style="font-size: 10px; opacity: 0.8;"> (week {{ booking.week_of_session }} of {{ booking.total_weeks }})</span>
+                                {% endif %}
                             </div>
-                            {% endfor %}
-                        {% else %}
-                            <button type="button" class="add-booking-btn"
-                                data-kid-id="{{ kid.id }}"
-                                data-week-id="{{ week.id }}"
-                                data-kid-name="{{ kid.name }}"
-                                data-week-num="{{ week.week_number }}">+ Add</button>
-                        {% endif %}
+                            <div class="booking-actions">
+                                <a href="{{ url_for('schedule.booking_view', id=booking.id) }}" style="text-decoration: none; color: inherit;">
+                                    <button type="button">Edit</button>
+                                </a>
+                                {% if booking.state != 'booked' %}
+                                <form method="POST" action="{{ url_for('schedule.booking_change_state', id=booking.id) }}" style="display: inline;">
+                                    {% if booking.state == 'idea' %}
+                                    <input type="hidden" name="state" value="preferred">
+                                    <button type="submit">→ Pref</button>
+                                    {% elif booking.state == 'preferred' %}
+                                    <input type="hidden" name="state" value="booked">
+                                    <button type="submit">→ Book</button>
+                                    {% endif %}
+                                </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                        <button type="button" class="add-booking-btn"
+                            data-kid-id="{{ kid.id }}"
+                            data-week-id="{{ week.id }}"
+                            data-kid-name="{{ kid.name }}"
+                            data-week-num="{{ week.week_number }}">+ Add</button>
                     {% endif %}
                 </td>
                 {% endfor %}
