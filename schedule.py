@@ -360,16 +360,33 @@ def booking_new():
         all_weeks = query_by_user(client, 'Week', user['email'], order_by='week_number')
         week_list = list(all_weeks)
 
-        # Find the starting week index
+        # Find the starting week index based on session's actual start date
+        # For multi-week sessions with dates, use the session start date to find the correct week
         start_week_idx = None
-        for idx, w in enumerate(week_list):
-            if w.key.name == week_id:
-                start_week_idx = idx
-                break
+        session_start_date_for_week = session_entity.get('session_start_date')
 
-        if start_week_idx is None:
-            flash('Selected week not found.', 'error')
-            return redirect(url_for('schedule.booking_new'))
+        if session_start_date_for_week and duration_weeks > 1:
+            # Find the week that contains the session's start date
+            for idx, w in enumerate(week_list):
+                week_start = w['start_date']
+                week_end = w['end_date']
+                if week_start <= session_start_date_for_week <= week_end:
+                    start_week_idx = idx
+                    break
+
+            if start_week_idx is None:
+                flash(f'Session starts on {session_start_date_for_week.strftime("%m/%d")} which is outside the summer schedule.', 'error')
+                return redirect(url_for('schedule.booking_new'))
+        else:
+            # For single-week sessions or sessions without dates, use the selected week
+            for idx, w in enumerate(week_list):
+                if w.key.name == week_id:
+                    start_week_idx = idx
+                    break
+
+            if start_week_idx is None:
+                flash('Selected week not found.', 'error')
+                return redirect(url_for('schedule.booking_new'))
 
         # Check if we have enough consecutive weeks
         if start_week_idx + duration_weeks > len(week_list):
@@ -1043,15 +1060,36 @@ def api_quick_booking():
     all_weeks = query_by_user(client, 'Week', user['email'], order_by='week_number')
     week_list = list(all_weeks)
 
-    # Find the starting week index
+    # Find the starting week index based on session's actual start date
+    # For multi-week sessions with dates, use the session start date to find the correct week
+    # Otherwise, fall back to the clicked week
     start_week_idx = None
-    for idx, w in enumerate(week_list):
-        if w.key.name == week_id:
-            start_week_idx = idx
-            break
+    session_start_date = session_entity.get('session_start_date')
 
-    if start_week_idx is None:
-        return jsonify({'error': 'Selected week not found'}), 404
+    if session_start_date and duration_weeks > 1:
+        # Find the week that contains the session's start date
+        for idx, w in enumerate(week_list):
+            week_start = w['start_date']
+            week_end = w['end_date']
+            # Session starts in this week if: week_start <= session_start <= week_end
+            if week_start <= session_start_date <= week_end:
+                start_week_idx = idx
+                break
+
+        if start_week_idx is None:
+            # Session start date doesn't fall within any summer week
+            return jsonify({
+                'error': f'Session starts on {session_start_date.strftime("%m/%d")} which is outside the summer schedule'
+            }), 400
+    else:
+        # For single-week sessions or sessions without dates, use the clicked week
+        for idx, w in enumerate(week_list):
+            if w.key.name == week_id:
+                start_week_idx = idx
+                break
+
+        if start_week_idx is None:
+            return jsonify({'error': 'Selected week not found'}), 404
 
     # Check if we have enough consecutive weeks
     if start_week_idx + duration_weeks > len(week_list):
