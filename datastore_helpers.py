@@ -242,3 +242,95 @@ def entities_to_dict_list(entities):
     format in one step.
     """
     return [entity_to_dict(entity) for entity in entities]
+
+
+# ============================================================================
+# SHARE TOKEN FUNCTIONS
+# ============================================================================
+
+def create_share_token(client, user_email):
+    """
+    Create a share token for sharing a user's schedule publicly.
+
+    Args:
+        client: datastore.Client instance
+        user_email: Email of the user creating the share
+
+    Returns:
+        The generated token string (UUID)
+
+    Why: Uses the token as the entity key for efficient direct lookup
+    without needing a query. This is important for public access where
+    we don't know the user_email upfront.
+    """
+    token = str(uuid.uuid4())
+    key = client.key('ShareToken', token)
+    entity = datastore.Entity(key=key)
+    entity['user_email'] = user_email
+    entity['created_at'] = datetime.now(timezone.utc)
+    entity['updated_at'] = datetime.now(timezone.utc)
+    client.put(entity)
+    return token
+
+
+def get_share_token(client, token):
+    """
+    Get a share token entity by its token value.
+
+    Args:
+        client: datastore.Client instance
+        token: The token string (UUID)
+
+    Returns:
+        The ShareToken entity if found, None otherwise
+
+    Why: This is used for public access - we look up by token without
+    knowing the user_email. No ownership check needed since the token
+    itself is the authorization.
+    """
+    key = client.key('ShareToken', token)
+    return client.get(key)
+
+
+def get_share_token_for_user(client, user_email):
+    """
+    Get the share token for a specific user (if one exists).
+
+    Args:
+        client: datastore.Client instance
+        user_email: Email of the user
+
+    Returns:
+        The token string if found, None otherwise
+
+    Why: Used to check if a user already has a share link before creating
+    a new one, and to display the existing share URL.
+    """
+    query = client.query(kind='ShareToken')
+    query.add_filter('user_email', '=', user_email)
+    tokens = list(query.fetch(limit=1))
+    if tokens:
+        return tokens[0].key.name  # The token is stored as the key name
+    return None
+
+
+def delete_share_token_for_user(client, user_email):
+    """
+    Delete all share tokens for a user.
+
+    Args:
+        client: datastore.Client instance
+        user_email: Email of the user
+
+    Returns:
+        Number of tokens deleted
+
+    Why: When a user wants to revoke their share link, we delete all
+    their tokens. This invalidates any shared URLs immediately.
+    """
+    query = client.query(kind='ShareToken')
+    query.add_filter('user_email', '=', user_email)
+    tokens = list(query.fetch())
+    for token in tokens:
+        client.delete(token.key)
+    return len(tokens)

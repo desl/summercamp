@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Schedule - Summer Camp Tool{% endblock %}
+{% block title %}{% if is_shared_view %}{{ owner_name }}'s {% endif %}Schedule - Summer Camp Tool{% endblock %}
 
 {% block extra_styles %}
 <style>
@@ -320,19 +320,70 @@
         border-radius: 4px;
         margin-bottom: 15px;
     }
+
+    /* Share Modal Styles */
+    .share-url-container {
+        display: flex;
+        gap: 10px;
+        margin: 15px 0;
+    }
+
+    .share-url-input {
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        font-size: 14px;
+        background-color: #f8f9fa;
+    }
+
+    .share-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .shared-view-banner {
+        background-color: #e7f3ff;
+        border: 1px solid #b8daff;
+        color: #004085;
+        padding: 15px 20px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
+    .shared-view-banner strong {
+        font-size: 16px;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
+{% if is_shared_view %}
+<div class="shared-view-banner">
+    <strong>Viewing {{ owner_name }}'s Summer Schedule</strong>
+    <p style="margin: 5px 0 0 0; font-size: 14px;">This is a read-only shared view.</p>
+</div>
+{% endif %}
+
 <div class="schedule-actions">
-    <h1 style="margin: 0;">Summer Schedule</h1>
+    <h1 style="margin: 0;">{% if is_shared_view %}{{ owner_name }}'s {% endif %}Summer Schedule</h1>
     <div style="display: flex; gap: 10px;">
+        {% if is_shared_view %}
+        <!-- Shared view: use link with query param for toggle -->
+        <a href="{{ url_for('schedule.view_shared_schedule', token=share_token, view='vertical' if view_mode == 'horizontal' else 'horizontal') }}" class="btn btn-primary">
+            {% if view_mode == 'horizontal' %}↕️ Switch to Vertical{% else %}↔️ Switch to Horizontal{% endif %}
+        </a>
+        {% else %}
+        <!-- Owner view: use form POST for toggle -->
         <form method="POST" action="{{ url_for('schedule.toggle_view') }}" style="display: inline;">
             <button type="submit" class="btn btn-primary">
                 {% if view_mode == 'horizontal' %}↕️ Switch to Vertical{% else %}↔️ Switch to Horizontal{% endif %}
             </button>
         </form>
         <a href="{{ url_for('schedule.booking_new') }}" class="btn btn-success">+ Add Booking</a>
+        <button type="button" id="share-btn" class="btn btn-primary">Share Schedule</button>
         <form method="POST" action="{{ url_for('schedule.weeks_recalculate') }}" style="display: inline;"
               onsubmit="return confirm('This will delete all bookings and recalculate weeks from scratch. Are you sure?');">
             <button type="submit" class="btn btn-secondary">Reset &amp; Recalculate Weeks</button>
@@ -340,6 +391,7 @@
         <form method="POST" action="{{ url_for('schedule.bookings_cleanup') }}" style="display: inline;">
             <button type="submit" class="btn btn-secondary">Cleanup Legacy Bookings</button>
         </form>
+        {% endif %}
     </div>
 </div>
 
@@ -405,6 +457,7 @@
                                 <span style="font-size: 10px; opacity: 0.8;"> (week {{ booking.week_of_session }} of {{ booking.total_weeks }})</span>
                                 {% endif %}
                             </div>
+                            {% if not is_shared_view %}
                             <div class="booking-actions">
                                 <a href="{{ url_for('schedule.booking_view', id=booking.id) }}" style="text-decoration: none; color: inherit;">
                                     <button type="button">Edit</button>
@@ -421,13 +474,16 @@
                                 </form>
                                 {% endif %}
                             </div>
+                            {% endif %}
                         </div>
                         {% endfor %}
+                        {% if not is_shared_view %}
                         <button type="button" class="add-booking-btn"
                             data-kid-id="{{ kid.id }}"
                             data-week-id="{{ week.id }}"
                             data-kid-name="{{ kid.name }}"
                             data-week-num="{{ week.week_number }}">+ Add</button>
+                        {% endif %}
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -473,6 +529,7 @@
                                 <span style="font-size: 10px; opacity: 0.8;"> (week {{ booking.week_of_session }} of {{ booking.total_weeks }})</span>
                                 {% endif %}
                             </div>
+                            {% if not is_shared_view %}
                             <div class="booking-actions">
                                 <a href="{{ url_for('schedule.booking_view', id=booking.id) }}" style="text-decoration: none; color: inherit;">
                                     <button type="button">Edit</button>
@@ -489,13 +546,16 @@
                                 </form>
                                 {% endif %}
                             </div>
+                            {% endif %}
                         </div>
                         {% endfor %}
+                        {% if not is_shared_view %}
                         <button type="button" class="add-booking-btn"
                             data-kid-id="{{ kid.id }}"
                             data-week-id="{{ week.id }}"
                             data-kid-name="{{ kid.name }}"
                             data-week-num="{{ week.week_number }}">+ Add</button>
+                        {% endif %}
                     {% endif %}
                 </td>
                 {% endfor %}
@@ -525,6 +585,39 @@
         <div style="display: flex; align-items: center; gap: 10px;">
             <div style="width: 20px; height: 20px; background-color: #e9ecef; border: 1px solid #dee2e6; border-radius: 3px;"></div>
             <span><strong>Blocked:</strong> Family trip</span>
+        </div>
+    </div>
+</div>
+
+{% if not is_shared_view %}
+<!-- Share Modal -->
+<div id="share-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Share Schedule</h3>
+            <button type="button" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="share-error" class="modal-error" style="display: none;"></div>
+
+            <!-- No share link yet -->
+            <div id="no-share-container">
+                <p>Create a shareable link to let others view your summer schedule. They won't be able to make any changes.</p>
+                <button type="button" id="create-share-btn" class="btn btn-primary">Create Share Link</button>
+            </div>
+
+            <!-- Share link exists -->
+            <div id="share-link-container" style="display: none;">
+                <p>Anyone with this link can view your schedule:</p>
+                <div class="share-url-container">
+                    <input type="text" id="share-url" class="share-url-input" readonly>
+                    <button type="button" id="copy-link-btn" class="btn btn-primary">Copy</button>
+                </div>
+                <p id="copy-success" style="color: #28a745; display: none;">Link copied to clipboard!</p>
+                <div class="share-actions">
+                    <button type="button" id="remove-share-btn" class="btn btn-danger">Remove Share Link</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -722,7 +815,153 @@
         div.textContent = text;
         return div.innerHTML;
     }
+
+    // ============ Share Functionality ============
+    const shareBtn = document.getElementById('share-btn');
+    const shareModal = document.getElementById('share-modal');
+    const shareModalClose = shareModal ? shareModal.querySelector('.modal-close') : null;
+    const shareError = document.getElementById('share-error');
+    const noShareContainer = document.getElementById('no-share-container');
+    const shareLinkContainer = document.getElementById('share-link-container');
+    const shareUrlInput = document.getElementById('share-url');
+    const createShareBtn = document.getElementById('create-share-btn');
+    const copyLinkBtn = document.getElementById('copy-link-btn');
+    const copySuccess = document.getElementById('copy-success');
+    const removeShareBtn = document.getElementById('remove-share-btn');
+
+    if (shareBtn && shareModal) {
+        // Open share modal
+        shareBtn.addEventListener('click', function() {
+            openShareModal();
+        });
+
+        // Close share modal
+        shareModalClose.addEventListener('click', closeShareModal);
+        shareModal.addEventListener('click', function(e) {
+            if (e.target === shareModal) {
+                closeShareModal();
+            }
+        });
+
+        // Create share link
+        createShareBtn.addEventListener('click', function() {
+            createShareBtn.disabled = true;
+            createShareBtn.textContent = 'Creating...';
+            shareError.style.display = 'none';
+
+            fetch('/schedule/share', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    createShareBtn.disabled = false;
+                    createShareBtn.textContent = 'Create Share Link';
+                    if (data.error) {
+                        showShareError(data.error);
+                        return;
+                    }
+                    showShareLink(data.share_url);
+                })
+                .catch(err => {
+                    createShareBtn.disabled = false;
+                    createShareBtn.textContent = 'Create Share Link';
+                    showShareError('Failed to create share link. Please try again.');
+                    console.error('Error creating share link:', err);
+                });
+        });
+
+        // Copy link to clipboard
+        copyLinkBtn.addEventListener('click', function() {
+            shareUrlInput.select();
+            navigator.clipboard.writeText(shareUrlInput.value).then(function() {
+                copySuccess.style.display = 'block';
+                setTimeout(function() {
+                    copySuccess.style.display = 'none';
+                }, 3000);
+            }).catch(function() {
+                // Fallback for older browsers
+                document.execCommand('copy');
+                copySuccess.style.display = 'block';
+                setTimeout(function() {
+                    copySuccess.style.display = 'none';
+                }, 3000);
+            });
+        });
+
+        // Remove share link
+        removeShareBtn.addEventListener('click', function() {
+            if (!confirm('Remove the share link? Anyone with the link will no longer be able to view your schedule.')) {
+                return;
+            }
+            removeShareBtn.disabled = true;
+            removeShareBtn.textContent = 'Removing...';
+            shareError.style.display = 'none';
+
+            fetch('/schedule/share', { method: 'DELETE' })
+                .then(response => response.json())
+                .then(data => {
+                    removeShareBtn.disabled = false;
+                    removeShareBtn.textContent = 'Remove Share Link';
+                    if (data.error) {
+                        showShareError(data.error);
+                        return;
+                    }
+                    showNoShareLink();
+                })
+                .catch(err => {
+                    removeShareBtn.disabled = false;
+                    removeShareBtn.textContent = 'Remove Share Link';
+                    showShareError('Failed to remove share link. Please try again.');
+                    console.error('Error removing share link:', err);
+                });
+        });
+    }
+
+    function openShareModal() {
+        shareModal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+        shareError.style.display = 'none';
+        copySuccess.style.display = 'none';
+
+        // Check current share status
+        noShareContainer.style.display = 'none';
+        shareLinkContainer.style.display = 'none';
+
+        fetch('/schedule/api/share-status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.has_share) {
+                    showShareLink(data.share_url);
+                } else {
+                    showNoShareLink();
+                }
+            })
+            .catch(err => {
+                showShareError('Failed to check share status. Please try again.');
+                console.error('Error checking share status:', err);
+            });
+    }
+
+    function closeShareModal() {
+        shareModal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    function showShareError(message) {
+        shareError.textContent = message;
+        shareError.style.display = 'block';
+    }
+
+    function showShareLink(url) {
+        noShareContainer.style.display = 'none';
+        shareLinkContainer.style.display = 'block';
+        shareUrlInput.value = url;
+    }
+
+    function showNoShareLink() {
+        noShareContainer.style.display = 'block';
+        shareLinkContainer.style.display = 'none';
+    }
 })();
 </script>
-{% endif %}
+{% endif %}{# not is_shared_view #}
+{% endif %}{# kids/weeks check #}
 {% endblock %}
