@@ -26,7 +26,11 @@ from datastore_helpers import (
     delete_entity,
     query_by_user,
     entity_to_dict,
-    entities_to_dict_list
+    entities_to_dict_list,
+    create_share_token,
+    get_share_token,
+    get_share_token_for_user,
+    delete_share_token_for_user
 )
 from calendar_integration import (
     create_booking_event,
@@ -1166,3 +1170,165 @@ def api_quick_booking():
         'bookings': created_bookings,
         'duration_weeks': duration_weeks
     })
+
+
+# ============================================================================
+# SHARE SCHEDULE ROUTES
+# ============================================================================
+
+@schedule_bp.route('/api/share-status')
+@login_required
+def get_share_status():
+    """
+    Get the current share status for the user's schedule.
+
+    Returns JSON with has_share boolean and share_url if exists.
+    """
+    user = get_current_user()
+    client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
+
+    token = get_share_token_for_user(client, user['email'])
+
+    if token:
+        share_url = request.host_url.rstrip('/') + url_for('schedule.view_shared_schedule', token=token)
+        return jsonify({
+            'has_share': True,
+            'share_url': share_url,
+            'token': token
+        })
+    else:
+        return jsonify({
+            'has_share': False
+        })
+
+
+@schedule_bp.route('/share', methods=['POST'])
+@login_required
+def create_share_link():
+    """
+    Create a share link for the user's schedule.
+
+    If one already exists, return the existing link.
+    """
+    user = get_current_user()
+    client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
+
+    # Check if user already has a share token
+    existing_token = get_share_token_for_user(client, user['email'])
+
+    if existing_token:
+        token = existing_token
+    else:
+        token = create_share_token(client, user['email'])
+
+    share_url = request.host_url.rstrip('/') + url_for('schedule.view_shared_schedule', token=token)
+
+    return jsonify({
+        'success': True,
+        'share_url': share_url,
+        'token': token
+    })
+
+
+@schedule_bp.route('/share', methods=['DELETE'])
+@login_required
+def delete_share_link():
+    """
+    Delete the user's share link, revoking public access.
+    """
+    user = get_current_user()
+    client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
+
+    deleted_count = delete_share_token_for_user(client, user['email'])
+
+    return jsonify({
+        'success': True,
+        'deleted_count': deleted_count
+    })
+
+
+@schedule_bp.route('/share/<token>')
+def view_shared_schedule(token):
+    """
+    Public view of a shared schedule (no login required).
+
+    Renders the schedule in read-only mode for the token owner's data.
+    Supports ?view=horizontal or ?view=vertical query parameter for toggling.
+    """
+    client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
+
+    # Look up the share token
+    share_token = get_share_token(client, token)
+
+    if not share_token:
+        return render_template('shared_schedule_not_found.html'), 404
+
+    owner_email = share_token['user_email']
+
+    # Get view preference: query param > cookie > default
+    view_param = request.args.get('view')
+    if view_param in ('horizontal', 'vertical'):
+        view_mode = view_param
+    else:
+        view_mode = request.cookies.get('shared_schedule_view', 'horizontal')
+
+    # Query owner's data
+    kids = query_by_user(client, 'Kid', owner_email, order_by='name')
+    weeks = query_by_user(client, 'Week', owner_email, order_by='week_number')
+    bookings = query_by_user(client, 'Booking', owner_email)
+    trips = list(query_by_user(client, 'Trip', owner_email))
+
+    # Build bookings lookup (same as schedule_view)
+    bookings_lookup = {}
+    for booking in bookings:
+        key = (booking['kid_id'], booking['week_id'])
+        if key not in bookings_lookup:
+            bookings_lookup[key] = []
+
+        booking_dict = entity_to_dict(booking)
+        session_entity = get_entity_for_user(client, 'Session', booking['session_id'], owner_email)
+        if session_entity:
+            booking_dict['session_name'] = session_entity['name']
+            camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], owner_email)
+            booking_dict['camp_name'] = camp['name'] if camp else 'Unknown'
+        else:
+            booking_dict['session_name'] = 'Unknown'
+            booking_dict['camp_name'] = 'Unknown'
+
+        bookings_lookup[key].append(booking_dict)
+
+    # Build week_trips lookup (same as schedule_view)
+    week_trips = {}
+    weeks_list = list(weeks)
+    for week in weeks_list:
+        if week.get('is_blocked'):
+            week_start = week['start_date']
+            week_end = week['end_date']
+            for trip in trips:
+                trip_start = trip['start_date']
+                trip_end = trip['end_date']
+                if trip_start <= week_end and trip_end >= week_start:
+                    week_trips[week.key.name] = trip['name']
+                    break
+
+    # Get owner name for display (use email username as fallback)
+    owner_name = owner_email.split('@')[0].title()
+
+    response = make_response(render_template(
+        'schedule.html',
+        user=None,  # No logged-in user
+        kids=entities_to_dict_list(kids),
+        weeks=entities_to_dict_list(weeks_list),
+        bookings_lookup=bookings_lookup,
+        week_trips=week_trips,
+        view_mode=view_mode,
+        is_shared_view=True,
+        owner_name=owner_name,
+        share_token=token
+    ))
+
+    # Save view preference in cookie if it was changed via query param
+    if view_param in ('horizontal', 'vertical'):
+        response.set_cookie('shared_schedule_view', view_mode, max_age=60*60*24*365)
+
+    return response
