@@ -27,7 +27,17 @@ from datastore_helpers import (
     delete_entity,
     query_by_user,
     entity_to_dict,
-    entities_to_dict_list
+    entities_to_dict_list,
+    # Kid access functions (multi-parent support)
+    create_kid_access,
+    get_kid_access,
+    get_accessible_kids,
+    has_kid_access,
+    is_kid_owner,
+    get_kid_with_access_check,
+    get_kid_access_list,
+    remove_kid_access,
+    delete_all_kid_access
 )
 from schedule import update_week_blocking  # For updating week blocking after trip changes
 from datetime import datetime, date
@@ -185,21 +195,49 @@ def parent_delete(id):
 @login_required
 def kids_list():
     """
-    List all kids for the current user.
+    List all kids the current user has access to (owned + shared).
 
     Why: Shows all children and their school dates, which are critical
-    for calculating summer weeks.
+    for calculating summer weeks. Includes kids shared by co-parents.
     """
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
 
-    # Query all kids for this user, ordered by name
-    kids = query_by_user(client, 'Kid', user['email'], order_by='name')
+    # Get all kids this user has access to (owned + shared)
+    kids = get_accessible_kids(client, user['email'], order_by='name')
+
+    # Build list with ownership info for each kid
+    kids_with_info = []
+    for kid in kids:
+        kid_dict = entity_to_dict(kid)
+        kid_id = kid.key.name
+
+        # Check if user is owner or shared
+        access = get_kid_access(client, kid_id, user['email'])
+        if access:
+            kid_dict['is_owner'] = access.get('role') == 'owner'
+            kid_dict['access_role'] = access.get('role')
+        else:
+            # Fallback for legacy kids (pre-migration)
+            kid_dict['is_owner'] = kid.get('user_email') == user['email']
+            kid_dict['access_role'] = 'owner' if kid_dict['is_owner'] else 'shared'
+
+        # Get sharing info for owned kids
+        if kid_dict['is_owner']:
+            access_list = get_kid_access_list(client, kid_id)
+            shared_with = [a.get('user_email') for a in access_list
+                         if a.get('role') == 'shared']
+            kid_dict['shared_with'] = shared_with
+        else:
+            # For shared kids, show who owns them
+            kid_dict['owner_email'] = kid.get('user_email')
+
+        kids_with_info.append(kid_dict)
 
     return render_template(
         'kids_list.html',
         user=user,
-        kids=entities_to_dict_list(kids)
+        kids=kids_with_info
     )
 
 
@@ -210,6 +248,7 @@ def kid_new():
     Create a new kid record.
 
     Why: Each kid needs school dates to calculate summer weeks.
+    Also creates a KidAccess record marking the creator as owner.
     """
     user = get_current_user()
 
@@ -240,6 +279,15 @@ def kid_new():
             }
         )
 
+        # Create owner KidAccess record for multi-parent support
+        create_kid_access(
+            client,
+            kid_id=kid.key.name,
+            user_email=user['email'],
+            role='owner',
+            granted_by=user['email']
+        )
+
         flash(f"Kid '{request.form['name']}' created successfully!", 'success')
         return redirect(url_for('family.kids_list'))
 
@@ -254,21 +302,25 @@ def kid_view(id):
     View and edit a kid record.
 
     Why: School dates and grades change each year.
+    Users with access (owner or shared) can view and edit.
     """
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
 
-    # Get the kid and verify ownership
-    kid = get_entity_for_user(client, 'Kid', id, user['email'])
+    # Get the kid and verify access (owner or shared)
+    kid = get_kid_with_access_check(client, id, user['email'])
 
     if not kid:
         flash('Kid not found or access denied.', 'error')
         return redirect(url_for('family.kids_list'))
 
+    kid_dict = entity_to_dict(kid)
+    kid_dict['is_owner'] = is_kid_owner(client, id, user['email'])
+
     return render_template(
         'kid_form.html',
         user=user,
-        kid=entity_to_dict(kid)
+        kid=kid_dict
     )
 
 
@@ -279,12 +331,13 @@ def kid_update(id):
     Update an existing kid record.
 
     Why: Grades and school dates change every year.
+    Users with access (owner or shared) can update.
     """
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
 
-    # Get the kid and verify ownership
-    kid = get_entity_for_user(client, 'Kid', id, user['email'])
+    # Get the kid and verify access (owner or shared can edit)
+    kid = get_kid_with_access_check(client, id, user['email'])
 
     if not kid:
         flash('Kid not found or access denied.', 'error')
@@ -324,6 +377,7 @@ def kid_delete(id):
     Delete a kid record.
 
     Why: Remove kids who are no longer attending summer camp (e.g., graduated).
+    Only the owner can delete a kid.
 
     Note: This should warn if bookings exist for this kid, but that's a
     Phase 2 enhancement.
@@ -331,18 +385,166 @@ def kid_delete(id):
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
 
-    # Get the kid and verify ownership
-    kid = get_entity_for_user(client, 'Kid', id, user['email'])
+    # Verify user is the owner (only owners can delete)
+    if not is_kid_owner(client, id, user['email']):
+        flash('Only the owner can delete a kid.', 'error')
+        return redirect(url_for('family.kids_list'))
+
+    # Get the kid
+    kid = get_kid_with_access_check(client, id, user['email'])
 
     if not kid:
         flash('Kid not found or access denied.', 'error')
         return redirect(url_for('family.kids_list'))
 
     name = kid['name']
+
+    # Delete all KidAccess records for this kid
+    delete_all_kid_access(client, id)
+
+    # Delete the kid entity
     delete_entity(client, kid)
 
     flash(f"Kid '{name}' deleted successfully.", 'success')
     return redirect(url_for('family.kids_list'))
+
+
+# ============================================================================
+# KID SHARING ROUTES (Multi-Parent Support)
+# ============================================================================
+
+@family_bp.route('/kids/<id>/sharing', methods=['GET'])
+@login_required
+def kid_sharing(id):
+    """
+    View and manage who has access to a kid.
+
+    Why: Allows owners to see and manage co-parents who can access this kid.
+    Only the owner can manage sharing.
+    """
+    user = get_current_user()
+    client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
+
+    # Verify user is the owner
+    if not is_kid_owner(client, id, user['email']):
+        flash('Only the owner can manage sharing.', 'error')
+        return redirect(url_for('family.kids_list'))
+
+    # Get the kid
+    kid = get_kid_with_access_check(client, id, user['email'])
+    if not kid:
+        flash('Kid not found.', 'error')
+        return redirect(url_for('family.kids_list'))
+
+    # Get all access records for this kid
+    access_list = get_kid_access_list(client, id)
+
+    # Separate owner and shared access
+    shared_users = []
+    for access in access_list:
+        if access.get('role') == 'shared':
+            shared_users.append({
+                'email': access.get('user_email'),
+                'granted_by': access.get('granted_by'),
+                'created_at': access.get('created_at')
+            })
+
+    return render_template(
+        'kid_sharing.html',
+        user=user,
+        kid=entity_to_dict(kid),
+        shared_users=shared_users
+    )
+
+
+@family_bp.route('/kids/<id>/sharing', methods=['POST'])
+@login_required
+def kid_sharing_add(id):
+    """
+    Add a co-parent to a kid.
+
+    Why: Allows owners to share access with other caregivers.
+    Access is granted immediately (no invitation acceptance required for now).
+    """
+    user = get_current_user()
+    client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
+
+    # Verify user is the owner
+    if not is_kid_owner(client, id, user['email']):
+        flash('Only the owner can add co-parents.', 'error')
+        return redirect(url_for('family.kids_list'))
+
+    # Get the kid
+    kid = get_kid_with_access_check(client, id, user['email'])
+    if not kid:
+        flash('Kid not found.', 'error')
+        return redirect(url_for('family.kids_list'))
+
+    # Get the email to share with
+    share_email = request.form.get('email', '').strip().lower()
+    if not share_email:
+        flash('Please enter an email address.', 'error')
+        return redirect(url_for('family.kid_sharing', id=id))
+
+    # Check if already shared
+    existing = get_kid_access(client, id, share_email)
+    if existing:
+        flash(f'{share_email} already has access to this kid.', 'error')
+        return redirect(url_for('family.kid_sharing', id=id))
+
+    # Can't share with yourself
+    if share_email == user['email']:
+        flash("You can't share with yourself.", 'error')
+        return redirect(url_for('family.kid_sharing', id=id))
+
+    # Create the shared access record
+    create_kid_access(
+        client,
+        kid_id=id,
+        user_email=share_email,
+        role='shared',
+        granted_by=user['email']
+    )
+
+    flash(f"Access granted to {share_email}.", 'success')
+    return redirect(url_for('family.kid_sharing', id=id))
+
+
+@family_bp.route('/kids/<id>/sharing/<email>', methods=['POST'])
+@login_required
+def kid_sharing_remove(id, email):
+    """
+    Remove a co-parent's access to a kid.
+
+    Why: Allows owners to revoke access when needed.
+    """
+    user = get_current_user()
+    client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
+
+    # Verify user is the owner
+    if not is_kid_owner(client, id, user['email']):
+        flash('Only the owner can remove co-parents.', 'error')
+        return redirect(url_for('family.kids_list'))
+
+    # Get the kid (for the name in the message)
+    kid = get_kid_with_access_check(client, id, user['email'])
+    if not kid:
+        flash('Kid not found.', 'error')
+        return redirect(url_for('family.kids_list'))
+
+    # Can't remove owner's access
+    if email == user['email']:
+        flash("You can't remove your own access.", 'error')
+        return redirect(url_for('family.kid_sharing', id=id))
+
+    # Remove the access
+    removed = remove_kid_access(client, id, email)
+    if removed:
+        flash(f"Access revoked for {email}.", 'success')
+    else:
+        flash(f"{email} doesn't have access to this kid.", 'error')
+
+    return redirect(url_for('family.kid_sharing', id=id))
 
 
 # ============================================================================

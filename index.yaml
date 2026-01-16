@@ -76,3 +76,14 @@ indexes:
   properties:
   - name: user_email
   - name: booking_group_id
+
+# ============================================================================
+# KidAccess indexes (Multi-Parent Support)
+# ============================================================================
+
+# Index for KidAccess by kid_id and user_email (check specific access)
+# Note: Single-property indexes are automatically created by Datastore
+- kind: KidAccess
+  properties:
+  - name: kid_id
+  - name: user_email

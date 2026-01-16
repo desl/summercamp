@@ -25,7 +25,9 @@ from datastore_helpers import (
     delete_entity,
     query_by_user,
     entity_to_dict,
-    entities_to_dict_list
+    entities_to_dict_list,
+    # Kid access functions (for co-parent visibility)
+    get_co_parent_emails
 )
 from calendar_integration import delete_booking_event
 from datetime import datetime, timedelta
@@ -90,20 +92,25 @@ def calculate_duration_weeks(start_date, end_date):
 @login_required
 def camps_list():
     """
-    List all camps for the current user.
+    List all camps for the current user plus camps from co-parents.
 
-    Why: Shows all camp organizations so user can manage available options.
+    Why: Shows all camp organizations available for booking, including camps
+    from co-parents (for booking shared kids). User can only edit their own camps.
     """
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
 
-    # Query all camps for this user
-    camps = query_by_user(client, 'Camp', user['email'], order_by='name')
+    # Get co-parent emails for looking up their camps
+    co_parent_emails = get_co_parent_emails(client, user['email'])
 
-    # For each camp, get the count of sessions
+    # Query all camps for this user
+    own_camps = query_by_user(client, 'Camp', user['email'], order_by='name')
+
+    # For each owned camp, get the count of sessions
     camps_with_counts = []
-    for camp in camps:
+    for camp in own_camps:
         camp_dict = entity_to_dict(camp)
+        camp_dict['is_owner'] = True
         # Query sessions for this camp
         sessions = query_by_user(
             client,
@@ -113,6 +120,26 @@ def camps_list():
         )
         camp_dict['session_count'] = len(sessions)
         camps_with_counts.append(camp_dict)
+
+    # Add camps from co-parents (read-only)
+    for co_parent_email in co_parent_emails:
+        co_parent_camps = query_by_user(client, 'Camp', co_parent_email, order_by='name')
+        for camp in co_parent_camps:
+            camp_dict = entity_to_dict(camp)
+            camp_dict['is_owner'] = False
+            camp_dict['owner_email'] = co_parent_email
+            # Query sessions for this camp
+            sessions = query_by_user(
+                client,
+                'Session',
+                co_parent_email,
+                filters=[('camp_id', '=', camp.key.name)]
+            )
+            camp_dict['session_count'] = len(sessions)
+            camps_with_counts.append(camp_dict)
+
+    # Sort all camps by name
+    camps_with_counts.sort(key=lambda c: c['name'].lower())
 
     return render_template(
         'camps_list.html',

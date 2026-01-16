@@ -27,10 +27,16 @@ from datastore_helpers import (
     query_by_user,
     entity_to_dict,
     entities_to_dict_list,
+    # Share token functions
     create_share_token,
     get_share_token,
     get_share_token_for_user,
-    delete_share_token_for_user
+    delete_share_token_for_user,
+    # Kid access functions (multi-parent support)
+    get_accessible_kids,
+    has_kid_access,
+    get_kid_with_access_check,
+    get_co_parent_emails
 )
 from calendar_integration import (
     create_booking_event,
@@ -53,9 +59,9 @@ def calculate_weeks_for_user(client, user_email):
     Calculate summer weeks based on kids' school dates.
 
     Algorithm:
-    1. Find earliest last_day_of_school across all kids
+    1. Find earliest last_day_of_school across all accessible kids
     2. Calculate first Monday after that date
-    3. Find latest first_day_of_school across all kids
+    3. Find latest first_day_of_school across all accessible kids
     4. Generate Week entities from first Monday to day before school starts
     5. Apply trip blocking
 
@@ -63,10 +69,11 @@ def calculate_weeks_for_user(client, user_email):
         List of created week entities
 
     Why: Summer weeks are determined by school schedules. We need to know
-    which weeks are available for camp planning.
+    which weeks are available for camp planning. Uses all accessible kids
+    (owned + shared) to determine the full summer range.
     """
-    # Get all kids for this user
-    kids = query_by_user(client, 'Kid', user_email)
+    # Get all accessible kids for this user (owned + shared)
+    kids = get_accessible_kids(client, user_email)
 
     if not kids:
         return []
@@ -284,15 +291,27 @@ def bookings_cleanup():
 @login_required
 def bookings_list():
     """
-    List all bookings for the current user.
+    List all bookings for accessible kids.
 
-    Why: Shows all camp bookings across all states.
+    Why: Shows all camp bookings across all states for owned + shared kids.
     """
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
 
-    # Get all bookings
-    bookings = query_by_user(client, 'Booking', user['email'])
+    # Get all accessible kids and their bookings
+    kids = get_accessible_kids(client, user['email'])
+    accessible_kid_ids = [k.key.name for k in kids]
+
+    # Get bookings for all accessible kids
+    bookings = []
+    for kid_id in accessible_kid_ids:
+        query = client.query(kind='Booking')
+        query.add_filter('kid_id', '=', kid_id)
+        bookings.extend(list(query.fetch()))
+
+    # Get co-parent emails for looking up their sessions/camps
+    co_parent_emails = get_co_parent_emails(client, user['email'])
+    all_visible_emails = {user['email']} | co_parent_emails
 
     # Enrich bookings with kid, session, and week info
     enriched_bookings = []
@@ -300,14 +319,23 @@ def bookings_list():
         booking_dict = entity_to_dict(booking)
 
         # Get kid name
-        kid = get_entity_for_user(client, 'Kid', booking['kid_id'], user['email'])
+        kid = get_kid_with_access_check(client, booking['kid_id'], user['email'])
         booking_dict['kid_name'] = kid['name'] if kid else 'Unknown'
 
-        # Get session and camp name
-        session_entity = get_entity_for_user(client, 'Session', booking['session_id'], user['email'])
+        # Get session and camp name (with co-parent visibility)
+        session_entity = None
+        for email in all_visible_emails:
+            session_entity = get_entity_for_user(client, 'Session', booking['session_id'], email)
+            if session_entity:
+                break
+
         if session_entity:
             booking_dict['session_name'] = session_entity['name']
-            camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], user['email'])
+            camp = None
+            for email in all_visible_emails:
+                camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], email)
+                if camp:
+                    break
             booking_dict['camp_name'] = camp['name'] if camp else 'Unknown'
         else:
             booking_dict['session_name'] = 'Unknown'
@@ -342,15 +370,23 @@ def booking_new():
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
 
+    # Get co-parent emails for looking up their sessions/camps
+    co_parent_emails = get_co_parent_emails(client, user['email'])
+    all_visible_emails = {user['email']} | co_parent_emails
+
     if request.method == 'POST':
         kid_id = request.form['kid_id']
         session_id = request.form['session_id']
         week_id = request.form['week_id']
         state = request.form.get('state', 'idea')
 
-        # Validate ownership
-        kid = get_entity_for_user(client, 'Kid', kid_id, user['email'])
-        session_entity = get_entity_for_user(client, 'Session', session_id, user['email'])
+        # Validate access - kid must be accessible, session from self or co-parent
+        kid = get_kid_with_access_check(client, kid_id, user['email'])
+        session_entity = None
+        for email in all_visible_emails:
+            session_entity = get_entity_for_user(client, 'Session', session_id, email)
+            if session_entity:
+                break
         week = get_entity_for_user(client, 'Week', week_id, user['email'])
 
         if not kid or not session_entity or not week:
@@ -417,8 +453,12 @@ def booking_new():
 
                 # Check if week is completely outside the session date range (with buffer)
                 if week_end < session_start_with_buffer or week_start > session_end_with_buffer:
-                    camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], user['email'])
-                    flash(f"Week {w['week_number']} ({week_start.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')}) is outside the date range for {camp['name']} - {session_entity['name']} (runs {session_start_date.strftime('%Y-%m-%d')} to {session_end_date.strftime('%Y-%m-%d')}).", 'error')
+                    camp = None
+                    for email in all_visible_emails:
+                        camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], email)
+                        if camp:
+                            break
+                    flash(f"Week {w['week_number']} ({week_start.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')}) is outside the date range for {camp['name'] if camp else 'Unknown'} - {session_entity['name']} (runs {session_start_date.strftime('%Y-%m-%d')} to {session_end_date.strftime('%Y-%m-%d')}).", 'error')
                     return redirect(url_for('schedule.booking_new'))
 
         # Check if any of the needed weeks are blocked by trips
@@ -427,24 +467,31 @@ def booking_new():
                 flash(f"Week {w['week_number']} is blocked by a family trip. Cannot book multi-week session.", 'error')
                 return redirect(url_for('schedule.booking_new'))
 
-        # Check for booking collisions with existing bookings
+        # Check for booking collisions with existing bookings (from any user who has access to this kid)
         collision_warnings = []
         has_booked_conflict = False
 
         for w in weeks_needed:
-            existing_bookings = query_by_user(
-                client,
-                'Booking',
-                user['email'],
-                filters=[('kid_id', '=', kid_id), ('week_id', '=', w.key.name)]
-            )
+            # Query bookings by kid_id only (not user_email) to catch all bookings from co-parents
+            query = client.query(kind='Booking')
+            query.add_filter('kid_id', '=', kid_id)
+            query.add_filter('week_id', '=', w.key.name)
+            existing_bookings = list(query.fetch())
 
             if existing_bookings:
                 for existing in existing_bookings:
-                    existing_session = get_entity_for_user(client, 'Session', existing['session_id'], user['email'])
+                    existing_session = None
+                    for email in all_visible_emails:
+                        existing_session = get_entity_for_user(client, 'Session', existing['session_id'], email)
+                        if existing_session:
+                            break
+
                     existing_camp = None
                     if existing_session:
-                        existing_camp = get_entity_for_user(client, 'Camp', existing_session['camp_id'], user['email'])
+                        for email in all_visible_emails:
+                            existing_camp = get_entity_for_user(client, 'Camp', existing_session['camp_id'], email)
+                            if existing_camp:
+                                break
 
                     camp_name = existing_camp['name'] if existing_camp else 'Unknown'
                     session_name = existing_session['name'] if existing_session else 'Unknown'
@@ -516,10 +563,15 @@ def booking_new():
             flash(f"Booking created for {kid['name']}!", 'success')
         return redirect(url_for('schedule.schedule_view'))
 
-    # GET - show form
-    kids = query_by_user(client, 'Kid', user['email'], order_by='name')
-    camps = query_by_user(client, 'Camp', user['email'], order_by='name')
+    # GET - show form with accessible kids and camps from self + co-parents
+    kids = get_accessible_kids(client, user['email'], order_by='name')
     weeks = query_by_user(client, 'Week', user['email'], order_by='week_number')
+
+    # Get camps from self and co-parents
+    camps = []
+    for email in all_visible_emails:
+        user_camps = query_by_user(client, 'Camp', email, order_by='name')
+        camps.extend(user_camps)
 
     # Get all sessions grouped by camp
     sessions_by_camp = {}
@@ -527,7 +579,7 @@ def booking_new():
         sessions = query_by_user(
             client,
             'Session',
-            user['email'],
+            camp['user_email'],  # Query using the camp owner's email
             filters=[('camp_id', '=', camp.key.name)]
         )
         sessions_by_camp[camp.key.name] = entities_to_dict_list(sessions)
@@ -550,20 +602,37 @@ def booking_view(id):
     View and edit a booking.
 
     Why: Users need to update booking details and state.
+    Allows access if user can access the kid associated with the booking.
     """
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
 
-    booking = get_entity_for_user(client, 'Booking', id, user['email'])
+    # Get the booking directly (not by user_email) and verify kid access
+    key = client.key('Booking', id)
+    booking = client.get(key)
 
     if not booking:
-        flash('Booking not found or access denied.', 'error')
+        flash('Booking not found.', 'error')
         return redirect(url_for('schedule.schedule_view'))
 
-    # Get related entities
-    kids = query_by_user(client, 'Kid', user['email'], order_by='name')
-    camps = query_by_user(client, 'Camp', user['email'], order_by='name')
+    # Verify user has access to the kid associated with this booking
+    if not has_kid_access(client, booking['kid_id'], user['email']):
+        flash('Access denied.', 'error')
+        return redirect(url_for('schedule.schedule_view'))
+
+    # Get co-parent emails for looking up their sessions/camps
+    co_parent_emails = get_co_parent_emails(client, user['email'])
+    all_visible_emails = {user['email']} | co_parent_emails
+
+    # Get related entities with multi-parent visibility
+    kids = get_accessible_kids(client, user['email'], order_by='name')
     weeks = query_by_user(client, 'Week', user['email'], order_by='week_number')
+
+    # Get camps from self and co-parents
+    camps = []
+    for email in all_visible_emails:
+        user_camps = query_by_user(client, 'Camp', email, order_by='name')
+        camps.extend(user_camps)
 
     # Get all sessions grouped by camp
     sessions_by_camp = {}
@@ -571,7 +640,7 @@ def booking_view(id):
         sessions = query_by_user(
             client,
             'Session',
-            user['email'],
+            camp['user_email'],
             filters=[('camp_id', '=', camp.key.name)]
         )
         sessions_by_camp[camp.key.name] = entities_to_dict_list(sessions)
@@ -594,13 +663,16 @@ def booking_update(id):
     Update a booking.
 
     Why: Booking details change (different sessions, preference order, etc).
+    Allows access if user can access the kid associated with the booking.
     """
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
 
-    booking = get_entity_for_user(client, 'Booking', id, user['email'])
+    # Get the booking directly and verify kid access
+    key = client.key('Booking', id)
+    booking = client.get(key)
 
-    if not booking:
+    if not booking or not has_kid_access(client, booking['kid_id'], user['email']):
         flash('Booking not found or access denied.', 'error')
         return redirect(url_for('schedule.schedule_view'))
 
@@ -623,12 +695,24 @@ def booking_update(id):
 
     # If booking is 'booked' and has a calendar event, update it
     if booking.get('state') == 'booked' and booking.get('calendar_event_id') and 'credentials' in session:
-        kid = get_entity_for_user(client, 'Kid', booking['kid_id'], user['email'])
-        session_entity = get_entity_for_user(client, 'Session', booking['session_id'], user['email'])
+        kid = get_kid_with_access_check(client, booking['kid_id'], user['email'])
         week = get_entity_for_user(client, 'Week', booking['week_id'], user['email'])
 
+        # Get session/camp with co-parent visibility
+        co_parent_emails = get_co_parent_emails(client, user['email'])
+        all_visible_emails = {user['email']} | co_parent_emails
+        session_entity = None
+        for email in all_visible_emails:
+            session_entity = get_entity_for_user(client, 'Session', booking['session_id'], email)
+            if session_entity:
+                break
+
         if kid and session_entity and week:
-            camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], user['email'])
+            camp = None
+            for email in all_visible_emails:
+                camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], email)
+                if camp:
+                    break
             parents = query_by_user(client, 'Parent', user['email'])
             parent = parents[0] if parents else {'name': user['name'], 'email': user['email']}
 
@@ -661,15 +745,22 @@ def booking_change_state(id):
     Change a booking's state (idea → preferred → booked).
 
     Why: Bookings progress through states as planning advances.
+    Allows access if user can access the kid associated with the booking.
     """
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
 
-    booking = get_entity_for_user(client, 'Booking', id, user['email'])
+    # Get the booking directly and verify kid access
+    key = client.key('Booking', id)
+    booking = client.get(key)
 
-    if not booking:
+    if not booking or not has_kid_access(client, booking['kid_id'], user['email']):
         flash('Booking not found or access denied.', 'error')
         return redirect(url_for('schedule.schedule_view'))
+
+    # Get co-parent emails for looking up their sessions/camps
+    co_parent_emails = get_co_parent_emails(client, user['email'])
+    all_visible_emails = {user['email']} | co_parent_emails
 
     new_state = request.form['state']
 
@@ -680,15 +771,12 @@ def booking_change_state(id):
         return redirect(url_for('schedule.schedule_view'))
 
     # Get all bookings in this group (for multi-week sessions)
+    # Query by booking_group_id directly (not user_email) since bookings could be from co-parents
     booking_group_id = booking.get('booking_group_id')
     if booking_group_id:
-        # Get all bookings in the group
-        group_bookings = query_by_user(
-            client,
-            'Booking',
-            user['email'],
-            filters=[('booking_group_id', '=', booking_group_id)]
-        )
+        query = client.query(kind='Booking')
+        query.add_filter('booking_group_id', '=', booking_group_id)
+        group_bookings = list(query.fetch())
     else:
         # Single booking
         group_bookings = [booking]
@@ -698,16 +786,11 @@ def booking_change_state(id):
         collision_warnings = []
 
         for grp_booking in group_bookings:
-            # Check for ANY other bookings (different booking_group_id) for this kid/week
-            all_bookings_for_week = query_by_user(
-                client,
-                'Booking',
-                user['email'],
-                filters=[
-                    ('kid_id', '=', grp_booking['kid_id']),
-                    ('week_id', '=', grp_booking['week_id'])
-                ]
-            )
+            # Check for ANY other bookings for this kid/week (from any user)
+            query = client.query(kind='Booking')
+            query.add_filter('kid_id', '=', grp_booking['kid_id'])
+            query.add_filter('week_id', '=', grp_booking['week_id'])
+            all_bookings_for_week = list(query.fetch())
 
             # Check if there are other bookings (different booking group)
             for other_booking in all_bookings_for_week:
@@ -718,13 +801,21 @@ def booking_change_state(id):
                     continue
 
                 # Found a conflicting booking
-                kid = get_entity_for_user(client, 'Kid', grp_booking['kid_id'], user['email'])
+                kid = get_kid_with_access_check(client, grp_booking['kid_id'], user['email'])
                 week = get_entity_for_user(client, 'Week', grp_booking['week_id'], user['email'])
 
-                other_session = get_entity_for_user(client, 'Session', other_booking['session_id'], user['email'])
+                other_session = None
+                for email in all_visible_emails:
+                    other_session = get_entity_for_user(client, 'Session', other_booking['session_id'], email)
+                    if other_session:
+                        break
+
                 other_camp = None
                 if other_session:
-                    other_camp = get_entity_for_user(client, 'Camp', other_session['camp_id'], user['email'])
+                    for email in all_visible_emails:
+                        other_camp = get_entity_for_user(client, 'Camp', other_session['camp_id'], email)
+                        if other_camp:
+                            break
 
                 camp_name = other_camp['name'] if other_camp else 'Unknown'
                 session_name = other_session['name'] if other_session else 'Unknown'
@@ -746,13 +837,22 @@ def booking_change_state(id):
 
         # If transitioning to 'booked', create calendar event
         if new_state == 'booked' and 'credentials' in session:
-            # Get related entities for calendar event
-            kid = get_entity_for_user(client, 'Kid', grp_booking['kid_id'], user['email'])
-            session_entity = get_entity_for_user(client, 'Session', grp_booking['session_id'], user['email'])
+            # Get related entities for calendar event (with co-parent visibility)
+            kid = get_kid_with_access_check(client, grp_booking['kid_id'], user['email'])
             week = get_entity_for_user(client, 'Week', grp_booking['week_id'], user['email'])
 
+            session_entity = None
+            for email in all_visible_emails:
+                session_entity = get_entity_for_user(client, 'Session', grp_booking['session_id'], email)
+                if session_entity:
+                    break
+
             if kid and session_entity and week:
-                camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], user['email'])
+                camp = None
+                for email in all_visible_emails:
+                    camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], email)
+                    if camp:
+                        break
 
                 # Get parent for calendar (use first parent or create dummy)
                 parents = query_by_user(client, 'Parent', user['email'])
@@ -799,27 +899,27 @@ def booking_delete(id):
     Delete a booking.
 
     Why: Remove cancelled or unwanted bookings.
+    Allows access if user can access the kid associated with the booking.
     """
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
 
-    booking = get_entity_for_user(client, 'Booking', id, user['email'])
+    # Get the booking directly and verify kid access
+    key = client.key('Booking', id)
+    booking = client.get(key)
 
-    if not booking:
+    if not booking or not has_kid_access(client, booking['kid_id'], user['email']):
         flash('Booking not found or access denied.', 'error')
         return redirect(url_for('schedule.schedule_view'))
 
     # Get all bookings in this group (for multi-week sessions)
+    # Query by booking_group_id directly (not user_email) since bookings could be from co-parents
     booking_group_id = booking.get('booking_group_id')
     if booking_group_id:
-        # Get all bookings in the group
         try:
-            group_bookings = query_by_user(
-                client,
-                'Booking',
-                user['email'],
-                filters=[('booking_group_id', '=', booking_group_id)]
-            )
+            query = client.query(kind='Booking')
+            query.add_filter('booking_group_id', '=', booking_group_id)
+            group_bookings = list(query.fetch())
         except Exception as e:
             # If query fails, just delete the single booking
             print(f"Error querying booking group: {e}")
@@ -879,6 +979,7 @@ def schedule_view():
 
     Why: This is the primary interface for camp planning - shows all kids
     and weeks in a grid with color-coded booking states.
+    Shows all accessible kids (owned + shared from co-parents).
     """
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
@@ -886,25 +987,74 @@ def schedule_view():
     # Get view preference from cookie (default to horizontal)
     view_mode = request.cookies.get('schedule_view', 'horizontal')
 
-    # Get all kids, weeks, bookings, and trips
-    kids = query_by_user(client, 'Kid', user['email'], order_by='name')
+    # Get all accessible kids (owned + shared)
+    kids = get_accessible_kids(client, user['email'], order_by='name')
     weeks = query_by_user(client, 'Week', user['email'], order_by='week_number')
-    bookings = query_by_user(client, 'Booking', user['email'])
+
+    # Auto-calculate weeks if user has accessible kids but no weeks yet
+    # This handles co-parents who haven't calculated weeks themselves
+    if kids and not weeks:
+        weeks = calculate_weeks_for_user(client, user['email'])
+
     trips = list(query_by_user(client, 'Trip', user['email']))
 
+    # Get bookings for all accessible kids (from any user who has access)
+    # This includes bookings created by co-parents for shared kids
+    accessible_kid_ids = [k.key.name for k in kids]
+    bookings = []
+    for kid_id in accessible_kid_ids:
+        query = client.query(kind='Booking')
+        query.add_filter('kid_id', '=', kid_id)
+        bookings.extend(list(query.fetch()))
+
+    # Get co-parent emails for looking up their sessions/camps
+    co_parent_emails = get_co_parent_emails(client, user['email'])
+    all_visible_emails = {user['email']} | co_parent_emails
+
+    # Build a lookup of current user's weeks by date range for matching
+    # This allows us to map bookings from other users' weeks to our weeks
+    weeks_list = list(weeks)
+    week_by_dates = {}
+    for week in weeks_list:
+        week_start = week['start_date']
+        week_by_dates[week_start] = week.key.name
+
     # Build a lookup: (kid_id, week_id) -> [bookings]
+    # We map booking week_ids to current user's week_ids by looking up the original week's dates
     bookings_lookup = {}
     for booking in bookings:
-        key = (booking['kid_id'], booking['week_id'])
+        # Get the original week to find its dates
+        original_week_id = booking['week_id']
+        original_week_key = client.key('Week', original_week_id)
+        original_week = client.get(original_week_key)
+
+        # Find matching week in current user's weeks by start date
+        matched_week_id = original_week_id  # Default to original
+        if original_week:
+            original_start = original_week.get('start_date')
+            if original_start and original_start in week_by_dates:
+                matched_week_id = week_by_dates[original_start]
+
+        key = (booking['kid_id'], matched_week_id)
         if key not in bookings_lookup:
             bookings_lookup[key] = []
 
         # Enrich booking with session/camp info
+        # Try looking up the session from visible users (self + co-parents)
         booking_dict = entity_to_dict(booking)
-        session_entity = get_entity_for_user(client, 'Session', booking['session_id'], user['email'])
+        session_entity = None
+        for email in all_visible_emails:
+            session_entity = get_entity_for_user(client, 'Session', booking['session_id'], email)
+            if session_entity:
+                break
+
         if session_entity:
             booking_dict['session_name'] = session_entity['name']
-            camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], user['email'])
+            camp = None
+            for email in all_visible_emails:
+                camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], email)
+                if camp:
+                    break
             booking_dict['camp_name'] = camp['name'] if camp else 'Unknown'
         else:
             booking_dict['session_name'] = 'Unknown'
@@ -914,7 +1064,6 @@ def schedule_view():
 
     # Build a lookup: week_id -> trip_name (for blocked weeks)
     week_trips = {}
-    weeks_list = list(weeks)
     for week in weeks_list:
         if week.get('is_blocked'):
             week_start = week['start_date']
@@ -967,6 +1116,7 @@ def api_sessions_for_week():
     Return sessions that match a week's date range.
 
     Used by the modal booking UI to show filtered sessions.
+    Includes sessions from co-parents for booking shared kids.
     """
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
@@ -985,15 +1135,23 @@ def api_sessions_for_week():
     week_start = week['start_date']
     week_end = week['end_date']
 
-    # Get all camps and their sessions
-    camps = query_by_user(client, 'Camp', user['email'], order_by='name')
+    # Get co-parent emails for looking up their camps/sessions
+    co_parent_emails = get_co_parent_emails(client, user['email'])
+    all_visible_emails = {user['email']} | co_parent_emails
+
+    # Get all camps from self and co-parents
+    camps = []
+    for email in all_visible_emails:
+        user_camps = query_by_user(client, 'Camp', email, order_by='name')
+        camps.extend(user_camps)
+
     result_sessions = []
 
     for camp in camps:
         sessions = query_by_user(
             client,
             'Session',
-            user['email'],
+            camp['user_email'],  # Query using the camp owner's email
             filters=[('camp_id', '=', camp.key.name)]
         )
 
@@ -1034,6 +1192,7 @@ def api_quick_booking():
     Create a booking with minimal data (defaults to 'idea' state).
 
     Used by the modal booking UI for quick session selection.
+    Supports accessible kids and sessions from co-parents.
     """
     user = get_current_user()
     client = get_datastore_client(current_app.config['GCP_PROJECT_ID'])
@@ -1049,9 +1208,17 @@ def api_quick_booking():
     if not kid_id or not session_id or not week_id:
         return jsonify({'error': 'kid_id, session_id, and week_id are required'}), 400
 
-    # Validate ownership
-    kid = get_entity_for_user(client, 'Kid', kid_id, user['email'])
-    session_entity = get_entity_for_user(client, 'Session', session_id, user['email'])
+    # Get co-parent emails for looking up their sessions/camps
+    co_parent_emails = get_co_parent_emails(client, user['email'])
+    all_visible_emails = {user['email']} | co_parent_emails
+
+    # Validate access - kid must be accessible, session from self or co-parent
+    kid = get_kid_with_access_check(client, kid_id, user['email'])
+    session_entity = None
+    for email in all_visible_emails:
+        session_entity = get_entity_for_user(client, 'Session', session_id, email)
+        if session_entity:
+            break
     week = get_entity_for_user(client, 'Week', week_id, user['email'])
 
     if not kid or not session_entity or not week:
@@ -1111,21 +1278,27 @@ def api_quick_booking():
                 'error': f'Week {w["week_number"]} is blocked by a family trip'
             }), 400
 
-    # Check for booking collisions with booked camps
+    # Check for booking collisions with booked camps (from any user who has access to this kid)
     for w in weeks_needed:
-        existing_bookings = query_by_user(
-            client,
-            'Booking',
-            user['email'],
-            filters=[('kid_id', '=', kid_id), ('week_id', '=', w.key.name)]
-        )
+        query = client.query(kind='Booking')
+        query.add_filter('kid_id', '=', kid_id)
+        query.add_filter('week_id', '=', w.key.name)
+        existing_bookings = list(query.fetch())
 
         for existing in existing_bookings:
             if existing['state'] == 'booked':
-                existing_session = get_entity_for_user(client, 'Session', existing['session_id'], user['email'])
+                existing_session = None
+                for email in all_visible_emails:
+                    existing_session = get_entity_for_user(client, 'Session', existing['session_id'], email)
+                    if existing_session:
+                        break
+
                 existing_camp = None
                 if existing_session:
-                    existing_camp = get_entity_for_user(client, 'Camp', existing_session['camp_id'], user['email'])
+                    for email in all_visible_emails:
+                        existing_camp = get_entity_for_user(client, 'Camp', existing_session['camp_id'], email)
+                        if existing_camp:
+                            break
 
                 camp_name = existing_camp['name'] if existing_camp else 'Unknown'
                 return jsonify({
@@ -1160,8 +1333,12 @@ def api_quick_booking():
         )
         created_bookings.append(entity_to_dict(booking))
 
-    # Get camp name for response
-    camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], user['email'])
+    # Get camp name for response (with co-parent visibility)
+    camp = None
+    for email in all_visible_emails:
+        camp = get_entity_for_user(client, 'Camp', session_entity['camp_id'], email)
+        if camp:
+            break
     camp_name = camp['name'] if camp else 'Unknown'
 
     return jsonify({

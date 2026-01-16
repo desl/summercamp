@@ -43,7 +43,9 @@ class Config:
     # In production, this should be set via ALLOWED_EMAILS environment variable
     # Format: comma-separated list (e.g., "user1@gmail.com,user2@gmail.com")
     ALLOWED_EMAILS = os.environ.get('ALLOWED_EMAILS', '').split(',') if os.environ.get('ALLOWED_EMAILS') else [
-        'safarileader@gmail.com',  # Default allowed user for development
+        'safarileader@gmail.com',
+        'eliz.a.olson@gmail.com',
+        'dlennon@khsparentgroups.org',
     ]
 
     # Session configuration

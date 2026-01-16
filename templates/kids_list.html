@@ -21,31 +21,43 @@
             <th>Birthday</th>
             <th>Last Day of School</th>
             <th>First Day of School</th>
-            <th>Friends</th>
+            <th>Sharing</th>
             <th>Actions</th>
         </tr>
     </thead>
     <tbody>
         {% for kid in kids %}
-        <tr>
-            <td><strong>{{ kid.name }}</strong></td>
+        <tr{% if not kid.is_owner %} style="background-color: #f0f7ff;"{% endif %}>
+            <td>
+                <strong>{{ kid.name }}</strong>
+                {% if not kid.is_owner %}
+                <span style="background-color: #17a2b8; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; margin-left: 8px;">Shared</span>
+                {% endif %}
+            </td>
             <td>Grade {{ kid.grade }}</td>
             <td>{{ kid.birthday }}</td>
             <td>{{ kid.last_day_of_school }}</td>
             <td>{{ kid.first_day_of_school }}</td>
             <td>
-                {% if kid.friends %}
-                    {{ kid.friends|join(', ') }}
+                {% if kid.is_owner %}
+                    {% if kid.shared_with %}
+                        <span style="color: #28a745; font-size: 13px;">Shared with {{ kid.shared_with|length }} {% if kid.shared_with|length == 1 %}person{% else %}people{% endif %}</span>
+                    {% else %}
+                        <span style="color: #6c757d; font-size: 13px;">Not shared</span>
+                    {% endif %}
                 {% else %}
-                    <span style="color: #6c757d;">None</span>
+                    <span style="color: #17a2b8; font-size: 13px;">From {{ kid.owner_email }}</span>
                 {% endif %}
             </td>
             <td class="actions" style="display: flex; gap: 5px; align-items: center;">
                 <a href="{{ url_for('family.kid_view', id=kid.id) }}" class="btn btn-secondary" style="padding: 6px 12px; line-height: 1.5; box-sizing: border-box; display: inline-block;">Edit</a>
+                {% if kid.is_owner %}
+                <a href="{{ url_for('family.kid_sharing', id=kid.id) }}" class="btn btn-secondary" style="padding: 6px 12px; line-height: 1.5; box-sizing: border-box; display: inline-block;">Share</a>
                 <form method="POST" action="{{ url_for('family.kid_delete', id=kid.id) }}" style="margin: 0; display: inline-block;"
                       onsubmit="return confirm('Delete {{ kid.name }}? This cannot be undone.');">
                     <button type="submit" class="btn btn-danger" style="padding: 6px 12px; line-height: 1.5; box-sizing: border-box; display: inline-block;">Delete</button>
                 </form>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}

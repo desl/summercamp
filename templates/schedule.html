@@ -171,10 +171,114 @@
             font-size: 11px;
         }
 
+        .schedule-table {
+            min-width: 600px;
+        }
+
         .schedule-table th,
         .schedule-table td {
             padding: 6px 4px;
-            min-width: 100px;
+            min-width: 90px;
+        }
+
+        /* Compact the kid/week name columns on mobile */
+        .schedule-table th.kid-header,
+        .schedule-table td.kid-name,
+        .schedule-table th.week-header,
+        .schedule-table td.week-info {
+            min-width: 60px;
+            max-width: 80px;
+            padding: 6px 4px;
+            font-size: 11px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        /* Truncate long names on mobile */
+        .schedule-table td.kid-name,
+        .schedule-table td.week-info strong {
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 70px;
+        }
+
+        /* Smaller booking cards on mobile */
+        .booking {
+            padding: 4px 6px;
+            font-size: 10px;
+        }
+
+        .booking-camp {
+            font-size: 10px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .booking-session {
+            font-size: 9px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .booking-actions {
+            flex-wrap: wrap;
+        }
+
+        .booking-actions button {
+            font-size: 9px;
+            padding: 2px 4px;
+        }
+
+        .add-booking-btn {
+            padding: 4px 6px;
+            font-size: 10px;
+        }
+
+        /* Hide action buttons row on mobile */
+        .schedule-actions {
+            flex-direction: column;
+            gap: 10px;
+            align-items: stretch;
+        }
+
+        .schedule-actions h1 {
+            font-size: 20px;
+        }
+
+        .schedule-actions > div {
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .schedule-actions .btn {
+            font-size: 12px;
+            padding: 8px 12px;
+        }
+    }
+
+    /* Extra small screens */
+    @media (max-width: 480px) {
+        .schedule-table th.kid-header,
+        .schedule-table td.kid-name,
+        .schedule-table th.week-header,
+        .schedule-table td.week-info {
+            min-width: 50px;
+            max-width: 60px;
+            font-size: 10px;
+        }
+
+        .schedule-table td.kid-name,
+        .schedule-table td.week-info strong {
+            max-width: 55px;
+        }
+
+        .schedule-table td {
+            min-width: 80px;
+            height: 80px;
         }
     }
 
