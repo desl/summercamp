@@ -24,11 +24,17 @@
     </thead>
     <tbody>
         {% for camp in camps %}
-        <tr>
+        <tr{% if not camp.is_owner %} style="background-color: #f0f7ff;"{% endif %}>
             <td>
                 <strong>{{ camp.name }}</strong>
+                {% if not camp.is_owner %}
+                <span style="background-color: #17a2b8; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; margin-left: 8px;">Shared</span>
+                {% endif %}
                 {% if camp.website %}
                 <br><a href="{{ camp.website }}" target="_blank" style="font-size: 12px; color: #4285f4;">{{ camp.website }}</a>
+                {% endif %}
+                {% if not camp.is_owner %}
+                <br><span style="color: #17a2b8; font-size: 12px;">From {{ camp.owner_email }}</span>
                 {% endif %}
             </td>
             <td style="font-size: 13px;">
@@ -48,11 +54,15 @@
                 </span>
             </td>
             <td class="actions" style="display: flex; gap: 5px; align-items: center;">
+                {% if camp.is_owner %}
                 <a href="{{ url_for('camps.camp_view', id=camp.id) }}" class="btn btn-secondary" style="padding: 6px 12px; line-height: 1.5; box-sizing: border-box; display: inline-block;">View/Edit</a>
                 <form method="POST" action="{{ url_for('camps.camp_delete', id=camp.id) }}" style="margin: 0; display: inline-block;"
                       onsubmit="return confirm('Delete {{ camp.name }}? This cannot be undone.');">
                     <button type="submit" class="btn btn-danger" style="padding: 6px 12px; line-height: 1.5; box-sizing: border-box; display: inline-block;">Delete</button>
                 </form>
+                {% else %}
+                <span style="color: #6c757d; font-size: 13px;">View only</span>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}

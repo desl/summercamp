@@ -245,6 +245,7 @@ def entities_to_dict_list(entities):
 
 
 # ============================================================================
+# ============================================================================
 # SHARE TOKEN FUNCTIONS
 # ============================================================================
 
@@ -334,3 +335,283 @@ def delete_share_token_for_user(client, user_email):
     for token in tokens:
         client.delete(token.key)
     return len(tokens)
+
+
+# ============================================================================
+# KID ACCESS FUNCTIONS (Multi-Parent Support)
+# ============================================================================
+# These functions manage access to kids across multiple parents/caregivers.
+# The KidAccess entity tracks which users can access which kids.
+
+def create_kid_access(client, kid_id, user_email, role, granted_by):
+    """
+    Create a KidAccess record granting a user access to a kid.
+
+    Args:
+        client: datastore.Client instance
+        kid_id: The kid's UUID
+        user_email: Email of user being granted access
+        role: 'owner' or 'shared'
+        granted_by: Email of user granting access
+
+    Returns:
+        The created KidAccess entity
+
+    Why: KidAccess records determine who can view/edit a kid's data.
+    Each kid has one 'owner' and can have multiple 'shared' users.
+    """
+    entity_id = str(uuid.uuid4())
+    key = client.key('KidAccess', entity_id)
+    entity = datastore.Entity(key=key)
+
+    now = datetime.now(timezone.utc)
+    entity['kid_id'] = kid_id
+    entity['user_email'] = user_email
+    entity['role'] = role
+    entity['granted_by'] = granted_by
+    entity['created_at'] = now
+    entity['updated_at'] = now
+
+    client.put(entity)
+    return entity
+
+
+def get_kid_access(client, kid_id, user_email):
+    """
+    Get the KidAccess record for a specific kid and user.
+
+    Args:
+        client: datastore.Client instance
+        kid_id: The kid's UUID
+        user_email: Email of user to check
+
+    Returns:
+        The KidAccess entity if found, None otherwise
+    """
+    query = client.query(kind='KidAccess')
+    query.add_filter('kid_id', '=', kid_id)
+    query.add_filter('user_email', '=', user_email)
+    results = list(query.fetch(limit=1))
+    return results[0] if results else None
+
+
+def get_accessible_kid_ids(client, user_email):
+    """
+    Get list of kid IDs this user can access (owned + shared).
+
+    Args:
+        client: datastore.Client instance
+        user_email: Email of the authenticated user
+
+    Returns:
+        List of kid ID strings
+
+    Why: This is the primary function for determining what kids a user can see.
+    It includes both kids they own and kids shared with them.
+    Also includes fallback for pre-migration kids (user_email field on Kid).
+    """
+    # First, check KidAccess table
+    query = client.query(kind='KidAccess')
+    query.add_filter('user_email', '=', user_email)
+    access_records = list(query.fetch())
+    kid_ids = [r['kid_id'] for r in access_records]
+
+    # FALLBACK: Also include kids with user_email matching (pre-migration)
+    # This ensures existing users still see their kids before migration runs
+    legacy_query = client.query(kind='Kid')
+    legacy_query.add_filter('user_email', '=', user_email)
+    for kid in legacy_query.fetch():
+        if kid.key.name not in kid_ids:
+            kid_ids.append(kid.key.name)
+
+    return kid_ids
+
+
+def get_accessible_kids(client, user_email, order_by='name'):
+    """
+    Get all kid entities this user can access.
+
+    Args:
+        client: datastore.Client instance
+        user_email: Email of the authenticated user
+        order_by: Field to sort by (default: 'name')
+
+    Returns:
+        List of Kid entities the user can access
+    """
+    kid_ids = get_accessible_kid_ids(client, user_email)
+    if not kid_ids:
+        return []
+
+    # Fetch all accessible kids
+    keys = [client.key('Kid', kid_id) for kid_id in kid_ids]
+    kids = client.get_multi(keys)
+
+    # Filter out None values (deleted kids) and sort
+    kids = [k for k in kids if k is not None]
+    if order_by:
+        kids.sort(key=lambda k: k.get(order_by, ''))
+
+    return kids
+
+
+def has_kid_access(client, kid_id, user_email):
+    """
+    Check if a user has access to a specific kid.
+
+    Args:
+        client: datastore.Client instance
+        kid_id: The kid's UUID
+        user_email: Email of the user to check
+
+    Returns:
+        True if user has access, False otherwise
+
+    Why: Use this for authorization checks before allowing operations on a kid.
+    """
+    # Check KidAccess table
+    access = get_kid_access(client, kid_id, user_email)
+    if access:
+        return True
+
+    # FALLBACK: Check legacy user_email on Kid entity
+    key = client.key('Kid', kid_id)
+    kid = client.get(key)
+    if kid and kid.get('user_email') == user_email:
+        return True
+
+    return False
+
+
+def is_kid_owner(client, kid_id, user_email):
+    """
+    Check if a user is the owner of a specific kid.
+
+    Args:
+        client: datastore.Client instance
+        kid_id: The kid's UUID
+        user_email: Email of the user to check
+
+    Returns:
+        True if user is the owner, False otherwise
+
+    Why: Some operations (like deleting a kid) are owner-only.
+    """
+    # Check KidAccess for owner role
+    access = get_kid_access(client, kid_id, user_email)
+    if access and access.get('role') == 'owner':
+        return True
+
+    # FALLBACK: Check legacy user_email on Kid entity
+    key = client.key('Kid', kid_id)
+    kid = client.get(key)
+    if kid and kid.get('user_email') == user_email:
+        return True
+
+    return False
+
+
+def get_kid_with_access_check(client, kid_id, user_email):
+    """
+    Get a kid entity if the user has access to it.
+
+    Args:
+        client: datastore.Client instance
+        kid_id: The kid's UUID
+        user_email: Email of the authenticated user
+
+    Returns:
+        The Kid entity if user has access, None otherwise
+
+    Why: Replaces get_entity_for_user for Kid entities to support multi-parent.
+    """
+    if not has_kid_access(client, kid_id, user_email):
+        return None
+
+    key = client.key('Kid', kid_id)
+    return client.get(key)
+
+
+def get_kid_access_list(client, kid_id):
+    """
+    Get all users who have access to a kid.
+
+    Args:
+        client: datastore.Client instance
+        kid_id: The kid's UUID
+
+    Returns:
+        List of KidAccess entities for this kid
+    """
+    query = client.query(kind='KidAccess')
+    query.add_filter('kid_id', '=', kid_id)
+    return list(query.fetch())
+
+
+def remove_kid_access(client, kid_id, user_email):
+    """
+    Remove a user's access to a kid.
+
+    Args:
+        client: datastore.Client instance
+        kid_id: The kid's UUID
+        user_email: Email of user whose access to remove
+
+    Returns:
+        True if access was removed, False if not found
+
+    Why: Used when revoking a co-parent's access to a kid.
+    """
+    access = get_kid_access(client, kid_id, user_email)
+    if access:
+        client.delete(access.key)
+        return True
+    return False
+
+
+def delete_all_kid_access(client, kid_id):
+    """
+    Delete all KidAccess records for a kid.
+
+    Args:
+        client: datastore.Client instance
+        kid_id: The kid's UUID
+
+    Why: Called when deleting a kid to clean up access records.
+    """
+    query = client.query(kind='KidAccess')
+    query.add_filter('kid_id', '=', kid_id)
+    access_records = list(query.fetch())
+    for record in access_records:
+        client.delete(record.key)
+
+
+def get_co_parent_emails(client, user_email):
+    """
+    Get emails of users who share at least one kid with this user.
+
+    Args:
+        client: datastore.Client instance
+        user_email: Email of the authenticated user
+
+    Returns:
+        Set of email addresses of co-parents
+
+    Why: Used to determine which camps/sessions should be visible
+    (camps from co-parents are shared for booking shared kids).
+    """
+    # Get all kids this user has access to
+    kid_ids = get_accessible_kid_ids(client, user_email)
+    if not kid_ids:
+        return set()
+
+    # Get all KidAccess records for these kids
+    co_parents = set()
+    for kid_id in kid_ids:
+        access_list = get_kid_access_list(client, kid_id)
+        for access in access_list:
+            email = access.get('user_email')
+            if email and email != user_email:
+                co_parents.add(email)
+
+    return co_parents

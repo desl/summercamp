@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Share {{ kid.name }} - Summer Camp Tool{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Share Access: {{ kid.name }}</h1>
+    <a href="{{ url_for('family.kids_list') }}" class="btn btn-secondary">Back to Kids</a>
+</div>
+
+<p style="color: #6c757d; margin-bottom: 30px;">
+    Add co-parents or caregivers who should have access to {{ kid.name }}'s schedule.
+    They will be able to view and edit bookings, camps, and sessions for {{ kid.name }}.
+</p>
+
+<!-- Add Co-Parent Form -->
+<div style="background-color: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 30px;">
+    <h3 style="margin-top: 0;">Add a Co-Parent</h3>
+    <form method="POST" action="{{ url_for('family.kid_sharing_add', id=kid.id) }}" style="display: flex; gap: 10px; align-items: flex-end;">
+        <div class="form-group" style="flex: 1; margin-bottom: 0;">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" required placeholder="coparent@example.com">
+        </div>
+        <button type="submit" class="btn btn-primary">Grant Access</button>
+    </form>
+    <p style="font-size: 13px; color: #6c757d; margin-top: 10px; margin-bottom: 0;">
+        The person must have an account to access the schedule. Access is granted immediately.
+    </p>
+</div>
+
+<!-- Current Access List -->
+<h3>People with Access</h3>
+
+{% if shared_users %}
+<table>
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Owner (you) -->
+        <tr style="background-color: #e8f5e9;">
+            <td><strong>{{ user.email }}</strong></td>
+            <td><span style="background-color: #28a745; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">Owner</span></td>
+            <td><span style="color: #6c757d; font-size: 13px;">Cannot be removed</span></td>
+        </tr>
+        <!-- Shared users -->
+        {% for shared in shared_users %}
+        <tr>
+            <td>{{ shared.email }}</td>
+            <td><span style="background-color: #17a2b8; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">Shared</span></td>
+            <td>
+                <form method="POST" action="{{ url_for('family.kid_sharing_remove', id=kid.id, email=shared.email) }}" style="margin: 0;"
+                      onsubmit="return confirm('Remove access for {{ shared.email }}?');">
+                    <button type="submit" class="btn btn-danger" style="padding: 4px 10px; font-size: 13px;">Remove</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<table>
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr style="background-color: #e8f5e9;">
+            <td><strong>{{ user.email }}</strong></td>
+            <td><span style="background-color: #28a745; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">Owner</span></td>
+            <td><span style="color: #6c757d; font-size: 13px;">Cannot be removed</span></td>
+        </tr>
+    </tbody>
+</table>
+<p style="color: #6c757d; margin-top: 15px;">
+    No co-parents added yet. Use the form above to share access with another caregiver.
+</p>
+{% endif %}
+
+<div style="margin-top: 30px; padding: 15px; background-color: #e7f3ff; border-radius: 6px;">
+    <strong>What can shared users do?</strong>
+    <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+        <li>View and edit {{ kid.name }}'s schedule and bookings</li>
+        <li>Add camps and sessions (visible to all who share {{ kid.name }})</li>
+        <li>Create and manage bookings for {{ kid.name }}</li>
+    </ul>
+    <p style="margin: 10px 0 0 0; font-size: 13px;">
+        <strong>Note:</strong> Only you (the owner) can delete {{ kid.name }} or manage sharing settings.
+    </p>
+</div>
+{% endblock %}
